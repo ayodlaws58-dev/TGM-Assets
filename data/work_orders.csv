@@ -1,2 +1,2 @@
 wo_id,asset_id,title,description,priority,status,assigned_to,created,due,completed,requested_by,cost,payment_status,paid_on,approval_status,approved_by,approved_on,decision_note
-WO-1001,AST-1,oil change,,Medium,New,a,2026-11-02,2026-11-02,,ayodlaws,20.0,Paid,2026-11-02,Approved,ayodlaws58,2026-11-02,
+WO-1001,AST-1,oil change,,Medium,Completed,a,2026-11-02,2026-11-02,2026-11-02,ayodlaws,20.0,Paid,2026-11-02,Approved,ayodlaws58,2026-11-02,
