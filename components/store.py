@@ -12,7 +12,10 @@ WO_COLS = ["wo_id", "asset_id", "title", "description", "priority", "status",
 PR_COLS = ["req_id", "item", "quantity", "unit_cost", "asset_id", "wo_id", "reason",
            "requested_by", "created", "status", "decided_by", "decided_on", "decision_note"]
 
-CATEGORIES = ["Generator", "Building", "Painting", "Other"]
+CATEGORIES = ["AC", "Generator", "JMG Generator", "Building", "Painting",
+              "Chairs", "Tables", "Other"]
+PROCUREMENT_ITEMS = ["Diesel purchase", "Office stationery", "Generator spare parts", "AC spare parts",
+                     "Paint and painting materials", "Furniture repair materials", "Cleaning supplies","Office-Furniture", "Other"]
 REPAINT_CATEGORIES = ["Building", "Painting"]
 STATUSES = ["New", "Assigned", "In Progress", "Completed"]
 PRIORITIES = ["Low", "Medium", "High", "Urgent"]

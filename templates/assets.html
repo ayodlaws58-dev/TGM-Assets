@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% from "_macros.html" import header, csrf, badge %}
 {% block title %}Assets{% endblock %}
 {% block content %}
-{{ header('Asset Registry', 'Generators, buildings, painting and other tracked assets') }}
+{{ header('Asset Registry', 'Generators, ACs, buildings, painting, furniture repairs and other tracked assets') }}
 <form method="get" class="form-grid card">
   <div><label>Search</label><input name="q" value="{{ q }}" placeholder="Name, location or category"></div>
   <div><label>Category</label><select name="category"><option value="">All</option>
@@ -23,7 +23,7 @@
 {% if has_role('super_admin') %}
 <details class="card"><summary>Add an asset</summary><form method="post" action="{{ url_for('asset_new') }}" class="form-grid" style="margin-top:12px">
 {{ csrf() }}
-<div><label>Name</label><input name="name" placeholder="Generator #3, Main building" required></div>
+<div><label>Name</label><input name="name" placeholder="JMG Generator, Office AC, Boardroom chairs" required></div>
 <div><label>Category</label><select name="category">{% for c in categories %}<option>{{ c }}</option>{% endfor %}</select></div>
 <div><label>Location</label><input name="location"></div>
 <div><label>Service / repaint interval (days)</label><input name="interval_days" type="number" min="1" value="180" required></div>

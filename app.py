@@ -142,7 +142,7 @@ def schedule_rows(assets):
 
 
 def money_fmt(v):
-    return f"${v:,.2f}"
+    return f"{v:,.2f}Naira"
 
 
 app.jinja_env.filters["money"] = money_fmt
@@ -454,7 +454,7 @@ def payment_save(wo_id):
     store.save_work_orders(orders)
     requester = orders.loc[i, "requested_by"].iloc[0]
     if pstatus == "Paid" and not was_paid and requester and requester != g.user["username"]:
-        notify.send([requester], "payment", f"Payment recorded: {wo_id}", f"${amount:,.2f} marked as paid.")
+        notify.send([requester], "payment", f"Payment recorded: {wo_id}", f"{amount:,.2f} Naira marked as paid.")
     flash("Payment saved.", "success")
     return redirect(url_for("payments"))
 
@@ -469,7 +469,7 @@ def procurement():
     reqs = reqs.assign(total=store.pr_total(reqs))
     committed = float(reqs.loc[reqs["status"].isin(store.PR_COMMITTED), "total"].sum())
     return render_template("procurement.html", rows=reqs.iloc[::-1].to_dict("records"),
-                           assets=store.load_assets().to_dict("records"),
+                           assets=store.load_assets().to_dict("records"), suggestions=store.PROCUREMENT_ITEMS,
                            orders=store.load_work_orders()["wo_id"].tolist(),
                            stats=dict(n=len(reqs), pending=int((reqs["status"] == "Pending").sum()),
                                       active=int(reqs["status"].isin(["Approved", "Ordered"]).sum()),
