@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% from "_macros.html" import header, csrf, metric, badge %}
 {% block title %}Payments{% endblock %}
 {% block content %}
-{{ header('💰', 'Payments', 'Costs and payment status of approved work orders') }}
+{{ header('Payments', 'Costs and payment status of approved work orders') }}
 <div class="grid g4">{{ metric('Total cost', total|money) }}{{ metric('Paid', paid|money, 'green') }}{{ metric('Outstanding', unpaid|money, 'red') }}</div>
 <h2>Approved work orders</h2>
 <div class="table-wrap"><table>

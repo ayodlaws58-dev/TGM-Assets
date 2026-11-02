@@ -1,8 +1,14 @@
 """End-to-end smoke test. Run on a copy of the project: it creates and edits CSV data."""
+import io
+import os
 import re
 from datetime import date, timedelta
 
 from app import app, auth
+
+
+def u1_status(client):
+    return client.get("/settings").status_code
 
 
 def token(client, url="/login"):
@@ -77,7 +83,7 @@ def test_all():
     post(ad, "/approvals/wo/WO-1001", dict(decision="Approved", note="ok"), "/approvals")
     assert b"unread" in u1.get("/notifications").data or b"approved" in u1.get("/notifications").data
     post(ad, "/workorders/WO-1001/status", dict(status="In Progress"), "/workorders")
-    assert b"overdue" in ad.get("/workorders").data
+    assert b"b-Overdue" in ad.get("/workorders").data
     post(ad, "/payments/WO-1001", dict(cost="300", payment_status="Paid"), "/payments")
     assert b"$300.00" in ad.get("/payments").data and b"$300.00" in ad.get("/").data
 
@@ -125,6 +131,33 @@ def test_all():
     assert b"Password updated" in post(anon, "/reset", dict(identifier="ad", code=code,
                                                             password="brandnew123"), "/reset").data
     assert b"Dashboard" in login("ad", "brandnew123")[1].data
+
+    # settings: developer only; SMTP save/mask; logo upload validation
+    assert sa.get("/settings").status_code == 403 and u1_status(ad) == 403
+    assert dev.get("/settings").status_code == 200
+    assert b"smtp.test" in post(dev, "/settings/smtp", dict(host="smtp.test", port="587", user="me",
+                                                            password="s3cret", sender="a@b.com"), "/settings").data
+    page = dev.get("/settings").data
+    assert b"s3cret" not in page and b"Saved. Leave blank" in page
+    assert b"Port must be" in post(dev, "/settings/smtp", dict(host="h", port="abc", sender="a@b.com"),
+                                   "/settings").data
+    assert b"s3cret" in open("smtp.json", "rb").read()
+    post(dev, "/settings/smtp", dict(host="smtp.test", port="587", user="me", password="", sender="a@b.com"),
+         "/settings")
+    assert b"s3cret" in open("smtp.json", "rb").read()  # blank password keeps the old one
+    bad = dev.post("/settings/logo", data=dict(csrf_token=token(dev, "/settings"),
+                                               logo=(io.BytesIO(b"<svg onload=alert(1)>"), "x.png")),
+                   content_type="multipart/form-data", follow_redirects=True)
+    assert b"Upload a PNG" in bad.data
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 50
+    ok = dev.post("/settings/logo", data=dict(csrf_token=token(dev, "/settings"),
+                                              logo=(io.BytesIO(png), "l.png")),
+                  content_type="multipart/form-data", follow_redirects=True)
+    assert b"Logo updated" in ok.data and anon.get("/logo").data == png
+    assert b"Logo" in dev.get("/settings").data
+    post(dev, "/settings/logo", dict(remove="1"), "/settings")
+    assert b"<svg" in anon.get("/logo").data
+    os.remove("smtp.json")
 
     # lockout
     for _ in range(6):

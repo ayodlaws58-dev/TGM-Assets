@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% from "_macros.html" import header, csrf %}
 {% block title %}Edit asset{% endblock %}
 {% block content %}
-{{ header('✏️', 'Edit ' ~ a.name, a.asset_id) }}
+{{ header('Edit ' ~ a.name, a.asset_id) }}
 <form method="post" class="card form-grid">{{ csrf() }}
 <div><label>Name</label><input name="name" value="{{ a.name }}" required></div>
 <div><label>Category</label><select name="category">{% for c in categories %}<option {{ 'selected' if c == a.category }}>{{ c }}</option>{% endfor %}</select></div>

@@ -1,9 +1,9 @@
 {% extends "base.html" %}{% from "_macros.html" import header, csrf, metric, due_list %}
 {% block title %}Maintenance{% endblock %}
 {% block content %}
-{{ header('🔧', 'Maintenance', 'Service and repainting schedule and reminders') }}
+{{ header('Maintenance', 'Service and repainting schedule and reminders') }}
 <div class="grid g4">{{ metric('Overdue', stats.overdue, 'red') }}{{ metric('Due in 14 days', stats.soon, 'amber') }}</div>
-<h2>⏰ Reminders</h2>{{ due_list(alerts) }}
+<h2>Reminders</h2>{{ due_list(alerts) }}
 {% if has_role('admin') %}
 <h2>Record a service / repaint</h2>
 <form method="post" action="{{ url_for('record_service') }}" class="card form-grid">{{ csrf() }}

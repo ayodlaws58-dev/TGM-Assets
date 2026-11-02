@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block title %}Setup{% endblock %}
 {% block content %}<div class="auth">
-<h1>🏭 TGM Assets</h1><div class="sub">First-time setup: create the Developer account</div>
+<h1><img class="logo-lg" src="{{ logo_url() }}" alt="TGM Assets logo"><br>TGM Assets</h1><div class="sub">First-time setup: create the Developer account</div>
 <form method="post" class="card"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <label>Full name</label><input name="full_name" required>
   <label>Username</label><input name="username" required>

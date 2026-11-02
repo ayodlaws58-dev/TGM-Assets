@@ -2,24 +2,26 @@
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{% block title %}TGM Assets{% endblock %}</title>
+<link rel="icon" href="{{ logo_url() }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </head><body>
 {% if g.user %}
 <aside class="sidebar">
-  <div class="brand">🏭 TGM Assets</div>
+  <a class="brand" href="{{ url_for('dashboard') }}"><img src="{{ logo_url() }}" alt="TGM Assets logo"><span>TGM Assets</span></a>
   <nav>
-    {% set nav = [('dashboard','🏠 Dashboard'),('assets_page','📦 Assets'),('maintenance','🔧 Maintenance'),
-                  ('workorders','📋 Work Orders'),('procurement','🛒 Procurement'),('inventory','🗃️ Inventory'),
-                  ('vendors','🏢 Vendors')] %}
-    {% if has_role('admin') %}{% set nav = nav + [('payments','💰 Payments'),('approvals','✅ Approvals'),
-                  ('reports','📊 Reports'),('users_page','👥 Users')] %}{% endif %}
+    {% set nav = [('dashboard','Dashboard'),('assets_page','Assets'),('maintenance','Maintenance'),
+                  ('workorders','Work Orders'),('procurement','Procurement'),('inventory','Inventory'),
+                  ('vendors','Vendors')] %}
+    {% if has_role('admin') %}{% set nav = nav + [('payments','Payments'),('approvals','Approvals'),
+                  ('reports','Reports'),('users_page','Users')] %}{% endif %}
+    {% if has_role('developer') %}{% set nav = nav + [('settings','Settings')] %}{% endif %}
     {% for ep, label in nav %}
       <a href="{{ url_for(ep) }}" class="{{ 'active' if request.endpoint == ep else '' }}">{{ label }}</a>
     {% endfor %}
     <a href="{{ url_for('notifications') }}" class="{{ 'active' if request.endpoint == 'notifications' else '' }}">
-      <span>🔔 Notifications</span>{% if g.unread %}<span class="count">{{ g.unread }}</span>{% endif %}</a>
-    <a href="{{ url_for('profile') }}" class="{{ 'active' if request.endpoint == 'profile' else '' }}">🙍 My Profile</a>
+      <span>Notifications</span>{% if g.unread %}<span class="count">{{ g.unread }}</span>{% endif %}</a>
+    <a href="{{ url_for('profile') }}" class="{{ 'active' if request.endpoint == 'profile' else '' }}">My Profile</a>
   </nav>
   <div class="user-card"><b>{{ g.user.full_name or g.user.username }}</b><br>
     <span class="badge b-{{ g.user.role }}">{{ ROLE_LABEL[g.user.role] }}</span></div>

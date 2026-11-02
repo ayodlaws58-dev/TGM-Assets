@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% from "_macros.html" import header, csrf %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+{{ header('Settings', 'Email delivery and branding (Developer only)') }}
+
+<h2>Email (SMTP)</h2>
+{% if mail_ok %}<div class="alert green">Email is configured.</div>
+{% else %}<div class="alert warn">Email is not configured yet. Fill in the form below, save, then send a test.</div>{% endif %}
+{% if env %}<div class="alert warn">These values are set by environment variables and override what you save here: {{ env|join(', ') }}.</div>{% endif %}
+<form method="post" action="{{ url_for('settings_smtp') }}" class="card form-grid">{{ csrf() }}
+<div><label>SMTP host</label><input name="host" value="{{ smtp.host }}" placeholder="smtp.gmail.com" required></div>
+<div><label>Port (587 = STARTTLS, 465 = SSL)</label><input name="port" type="number" value="{{ smtp.port or 587 }}" required></div>
+<div><label>Username</label><input name="user" value="{{ smtp.user }}" autocomplete="off"></div>
+<div><label>Password / app password</label><input name="password" type="password" autocomplete="new-password"
+  placeholder="{{ 'Saved. Leave blank to keep it' if smtp.has_password else '' }}"></div>
+<div><label>Sender address</label><input name="sender" value="{{ smtp.sender }}" placeholder="TGM Assets &lt;you@example.com&gt;"></div>
+<div><button>Save SMTP settings</button></div></form>
+
+<form method="post" action="{{ url_for('settings_smtp_test') }}" class="card inline">{{ csrf() }}
+<input name="to" type="email" placeholder="{{ g.user.email or 'Send the test to this address' }}" style="flex:1;width:auto">
+<button class="btn-gray">Send test email</button></form>
+<p class="muted">The test goes to your profile email if you have one. The password is stored in <code>smtp.json</code> in the project folder. Keep that file private.</p>
+
+<h2>Logo</h2>
+<div class="card inline"><img class="logo-preview" src="{{ logo_url() }}?v={{ range(1, 10**6)|random }}" alt="Current logo">
+<form method="post" action="{{ url_for('settings_logo') }}" enctype="multipart/form-data" style="flex:1">{{ csrf() }}
+<label>Upload a PNG, JPG or WebP (square works best, under 1 MB)</label>
+<div class="inline"><input type="file" name="logo" accept="image/png,image/jpeg,image/webp" required><button>Upload</button></div></form>
+{% if custom_logo %}<form method="post" action="{{ url_for('settings_logo') }}" data-confirm="Remove the custom logo?">{{ csrf() }}
+<input type="hidden" name="remove" value="1"><button class="btn-red">Remove</button></form>{% endif %}</div>
+{% endblock %}

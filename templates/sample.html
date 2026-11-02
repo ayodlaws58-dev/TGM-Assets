@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% from "_macros.html" import header %}
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
-{{ header(icon, title, 'Sample data: not yet connected to real records') }}
+{{ header(title, 'Sample data: not yet connected to real records') }}
 {% if kind == 'inventory' %}
 <div class="table-wrap"><table><tr><th>Item</th><th>Stock</th><th>Minimum</th></tr>
 {% for i in items %}<tr><td>{{ i.item }}</td><td>{{ i.stock }}</td><td>{{ i.minimum }}</td></tr>{% endfor %}</table></div>

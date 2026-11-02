@@ -1,11 +1,11 @@
 {% extends "base.html" %}{% from "_macros.html" import header, csrf, metric, badge %}
 {% block title %}Procurement{% endblock %}
 {% block content %}
-{{ header('🛒', 'Procurement', 'Request materials and parts. Requests need approval before ordering') }}
+{{ header('Procurement', 'Request materials and parts. Requests need approval before ordering') }}
 <div class="grid g4">{{ metric('Requests', stats.n) }}{{ metric('Awaiting approval', stats.pending, 'amber') }}
 {{ metric('Approved / ordered', stats.active) }}{{ metric('Committed spend', stats.committed|money, 'green') }}</div>
 
-<details class="card" style="margin-top:14px"><summary>➕ New procurement request</summary>
+<details class="card" style="margin-top:14px"><summary>New procurement request</summary>
 <form method="post" action="{{ url_for('procurement_new') }}" class="form-grid" style="margin-top:12px">{{ csrf() }}
 <div><label>Item / material</label><input name="item" required></div>
 <div><label>Quantity</label><input type="number" name="quantity" min="1" value="1" required></div>

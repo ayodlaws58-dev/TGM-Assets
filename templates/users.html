@@ -1,10 +1,10 @@
 {% extends "base.html" %}{% from "_macros.html" import header, csrf %}
 {% block title %}Users{% endblock %}
 {% block content %}
-{{ header('👥', 'User Management', 'Create accounts, change roles, email users and reset passwords') }}
-{% if not mail_ok %}<div class="alert warn">Email isn't configured, so emails can't be sent. Copy <code>smtp.example.json</code> to <code>smtp.json</code> and fill in your SMTP details.</div>{% endif %}
+{{ header('User Management', 'Create accounts, change roles, email users and reset passwords') }}
+{% if not mail_ok %}<div class="alert warn">Email isn't configured, so emails can't be sent. {% if has_role('developer') %}<a href="{{ url_for('settings') }}">Set up SMTP in Settings</a>.{% else %}Ask a Developer to set it up in Settings.{% endif %}</div>{% endif %}
 
-<details class="card" {{ 'open' if users|length <= 1 }}><summary>➕ Create user</summary>
+<details class="card" {{ 'open' if users|length <= 1 }}><summary>Create user</summary>
 <form method="post" action="{{ url_for('user_new') }}" class="form-grid" style="margin-top:12px">{{ csrf() }}
 <div><label>Full name</label><input name="full_name"></div>
 <div><label>Username</label><input name="username" required></div>
@@ -28,11 +28,11 @@
 <div class="inline"><input name="email" type="email" value="{{ u.email }}"><button>Update</button></div></form>
 <form method="post" action="{{ url_for('user_password', username=u.username) }}">{{ csrf() }}<label>New password</label>
 <div class="inline"><input name="password" type="password" minlength="8" required><button>Reset</button></div></form>
-<form method="post" action="{{ url_for('user_delete', username=u.username) }}" data-confirm="Delete {{ u.username }}?">{{ csrf() }}<label>&nbsp;</label><button class="btn-red">🗑️ Delete</button></form>
+<form method="post" action="{{ url_for('user_delete', username=u.username) }}" data-confirm="Delete {{ u.username }}?">{{ csrf() }}<label>&nbsp;</label><button class="btn-red">Delete</button></form>
 </div></details>
 {% else %}<p class="muted">No accounts you can modify.</p>{% endfor %}
 
-<h2>✉️ Send an email</h2>
+<h2>Send an email</h2>
 {% if not mail_ok %}<p class="muted">Configure SMTP to enable this.</p>
 {% else %}<form method="post" action="{{ url_for('user_compose') }}" class="card">{{ csrf() }}
 <label>Recipients</label><select name="to" multiple size="5">{% for u in users if u.email %}<option value="{{ u.username }}">{{ u.username }} ({{ u.email }})</option>{% endfor %}</select>

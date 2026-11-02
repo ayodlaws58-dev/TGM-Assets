@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% from "_macros.html" import header %}
 {% block title %}Reports{% endblock %}
 {% block content %}
-{{ header('📊', 'Reports', 'Download your data as CSV') }}
-<div class="card">{% for e in exports %}<p><a class="btn" href="{{ url_for('report_csv', name=e) }}">⬇️ {{ e|replace('_', ' ')|title }}</a></p>{% endfor %}</div>
+{{ header('Reports', 'Download your data as CSV') }}
+<div class="card">{% for e in exports %}<p><a class="btn" href="{{ url_for('report_csv', name=e) }}">Download {{ e|replace('_', ' ')|title }}</a></p>{% endfor %}</div>
 {% endblock %}

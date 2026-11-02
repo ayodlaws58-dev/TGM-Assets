@@ -1,5 +1,5 @@
-{% macro header(icon, title, sub='') %}
-<div class="page-header"><h1>{{ icon }} {{ title }}</h1>{% if sub %}<p>{{ sub }}</p>{% endif %}</div>
+{% macro header(title, sub='') %}
+<div class="page-header"><h1>{{ title }}</h1>{% if sub %}<p>{{ sub }}</p>{% endif %}</div>
 {% endmacro %}
 
 {% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}

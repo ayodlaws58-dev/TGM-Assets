@@ -7,7 +7,7 @@ from functools import wraps
 
 import pandas as pd
 from flask import (Flask, Response, abort, flash, g, redirect, render_template,
-                   request, session, url_for)
+                   request, send_file, session, url_for)
 
 from components import auth, mailer, notify, store
 
@@ -38,7 +38,7 @@ def csrf_token():
 
 app.jinja_env.globals.update(csrf_token=csrf_token, ROLE_LABEL=auth.ROLE_LABEL,
                              has_role=lambda r: bool(g.get("user")) and auth.RANK[g.user["role"]] >= auth.RANK[r],
-                             ICONS=notify.ICONS)
+                             KIND_LABEL=notify.KIND_LABEL, logo_url=lambda: url_for("logo"))
 
 
 @app.before_request
@@ -727,6 +727,81 @@ def profile():
     return render_template("profile.html")
 
 
+# ---------- settings (developer): logo and SMTP ----------
+LOGO_TYPES = {b"\x89PNG\r\n\x1a\n": ("png", "image/png"), b"\xff\xd8\xff": ("jpg", "image/jpeg"),
+              b"RIFF": ("webp", "image/webp")}
+
+
+def _custom_logo():
+    for ext, mime in (("png", "image/png"), ("jpg", "image/jpeg"), ("webp", "image/webp")):
+        p = store.DATA / f"logo.{ext}"
+        if p.exists():
+            return p, mime
+    return None, None
+
+
+@app.route("/logo")
+def logo():
+    path, mime = _custom_logo()
+    resp = send_file(path, mimetype=mime) if path else send_file(BASE / "static" / "logo.svg",
+                                                                  mimetype="image/svg+xml")
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
+@app.route("/settings")
+@login_required("developer")
+def settings():
+    return render_template("settings.html", smtp=mailer.current(), env=mailer.env_overrides(),
+                           mail_ok=mailer.configured(), custom_logo=_custom_logo()[0] is not None)
+
+
+@app.post("/settings/smtp")
+@login_required("developer")
+def settings_smtp():
+    f = request.form
+    err = mailer.save_config(f.get("host", ""), f.get("port", ""), f.get("user", ""),
+                             f.get("password", ""), f.get("sender", ""))
+    flash(err or "SMTP settings saved.", "error" if err else "success")
+    return redirect(url_for("settings"))
+
+
+@app.post("/settings/smtp/test")
+@login_required("developer")
+def settings_smtp_test():
+    to = g.user["email"] or request.form.get("to", "").strip()
+    if not auth.EMAIL_RE.match(to):
+        flash("Add your email on My Profile, or enter an address to send the test to.", "error")
+    else:
+        err = mailer.send_email(to, "TGM Assets test email",
+                                "This is a test email from TGM Assets. Your SMTP settings work.")
+        flash(err or f"Test email sent to {to}.", "error" if err else "success")
+    return redirect(url_for("settings"))
+
+
+@app.post("/settings/logo")
+@login_required("developer")
+def settings_logo():
+    if request.form.get("remove"):
+        for ext in ("png", "jpg", "webp"):
+            (store.DATA / f"logo.{ext}").unlink(missing_ok=True)
+        flash("Custom logo removed. Using the default logo.", "success")
+        return redirect(url_for("settings"))
+    file = request.files.get("logo")
+    data = file.read(1024 * 1024 + 1) if file else b""
+    kind = next((v for magic, v in LOGO_TYPES.items() if data.startswith(magic)), None)
+    if kind and kind[0] == "webp" and data[8:12] != b"WEBP":
+        kind = None
+    if not kind or len(data) > 1024 * 1024:
+        flash("Upload a PNG, JPG or WebP image under 1 MB.", "error")
+        return redirect(url_for("settings"))
+    for ext in ("png", "jpg", "webp"):
+        (store.DATA / f"logo.{ext}").unlink(missing_ok=True)
+    (store.DATA / f"logo.{kind[0]}").write_bytes(data)
+    flash("Logo updated.", "success")
+    return redirect(url_for("settings"))
+
+
 # ---------- reports / sample pages ----------
 EXPORTS = {"assets": (store.load_assets, "assets.csv"),
            "work_orders": (store.load_work_orders, "work_orders.csv"),
@@ -754,7 +829,7 @@ def report_csv(name):
 def inventory():
     items = [dict(item="Bearings", stock=80, minimum=100), dict(item="Filters", stock=250, minimum=100),
              dict(item="Belts", stock=25, minimum=50)]
-    return render_template("sample.html", title="Inventory", icon="📋", items=items, kind="inventory")
+    return render_template("sample.html", title="Inventory", items=items, kind="inventory")
 
 
 @app.route("/vendors")
@@ -762,7 +837,7 @@ def inventory():
 def vendors():
     items = [dict(name="ABC Industrial", score=92), dict(name="Global Parts", score=84),
              dict(name="Prime Supply", score=78)]
-    return render_template("sample.html", title="Vendors", icon="🏢", items=items, kind="vendors")
+    return render_template("sample.html", title="Vendors", items=items, kind="vendors")
 
 
 if __name__ == "__main__":

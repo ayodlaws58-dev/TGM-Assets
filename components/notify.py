@@ -6,7 +6,8 @@ from components import auth, mailer, store
 
 FILE = store.DATA / "notifications.csv"
 COLS = ["notif_id", "username", "kind", "title", "message", "created", "read", "key"]
-ICONS = {"reminder": "⏰", "overdue": "🚨", "approval": "✅", "request": "📨", "payment": "💰", "info": "ℹ️"}
+KIND_LABEL = {"reminder": "Reminder", "overdue": "Overdue", "approval": "Decision", "request": "Request",
+              "payment": "Payment", "info": "Update"}
 
 
 def _load():
