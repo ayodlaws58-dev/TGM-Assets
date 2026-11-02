@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}Enter code{% endblock %}
+{% block content %}<div class="auth">
+<h1>Enter your code</h1><div class="sub">Check your email for the 6-digit code</div>
+<form method="post" class="card"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Username or email</label><input name="identifier" value="{{ identifier }}" required>
+  <label>6-digit code</label><input name="code" inputmode="numeric" maxlength="6" required autofocus>
+  <label>New password (min 8 chars)</label><input name="password" type="password" minlength="8" required>
+  <button>Set new password</button>
+  <p style="text-align:center;margin-bottom:0"><a href="{{ url_for('login') }}">← Back to sign in</a></p>
+</form></div>{% endblock %}

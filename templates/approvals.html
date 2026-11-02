@@ -1,0 +1,33 @@
+{% extends "base.html" %}{% from "_macros.html" import header, csrf, badge %}
+{% block title %}Approvals{% endblock %}
+{% block content %}
+{{ header('✅', 'Approvals', 'Approve or reject work orders and procurement requests') }}
+
+{% macro decision(url, requester) %}
+{% if may_decide(requester) %}
+<form method="post" action="{{ url }}">{{ csrf() }}
+  <div class="inline" style="margin-top:8px"><input name="note" placeholder="Note (required to reject)" style="flex:1;width:auto">
+  <button name="decision" value="Approved" class="btn-green">✅ Approve</button>
+  <button name="decision" value="Rejected" class="btn-red">❌ Reject</button></div></form>
+{% else %}<p class="muted">You requested this. Another approver must decide.</p>{% endif %}
+{% endmacro %}
+
+<h2>📋 Work orders ({{ pending_wo|length }})</h2>
+{% for o in pending_wo %}<div class="card"><b>{{ o.wo_id }}</b> · {{ o.title }} {{ badge(o.priority) }}
+<div class="muted">Asset {{ o.asset_id }} · due {{ o.due or 'n/a' }} · est. {{ o.cost|float|money }} · requested by {{ o.requested_by }}</div>
+{% if o.description %}<p>{{ o.description }}</p>{% endif %}
+{{ decision(url_for('decide_wo', wo_id=o.wo_id), o.requested_by) }}</div>
+{% else %}<div class="alert green">No work orders awaiting approval.</div>{% endfor %}
+
+<h2>🛒 Procurement ({{ pending_pr|length }})</h2>
+{% for r in pending_pr %}<div class="card"><b>{{ r.req_id }}</b> · {{ r.item }} × {{ r.quantity }} · {{ r.total|money }}
+<div class="muted">Asset {{ r.asset_id or 'n/a' }} · WO {{ r.wo_id or 'n/a' }} · requested by {{ r.requested_by }}</div>
+{% if r.reason %}<p>{{ r.reason }}</p>{% endif %}
+{{ decision(url_for('decide_pr', req_id=r.req_id), r.requested_by) }}</div>
+{% else %}<div class="alert green">No procurement requests awaiting approval.</div>{% endfor %}
+
+<h2>🕘 History</h2>
+<div class="table-wrap"><table><tr><th>ID</th><th>Title</th><th>By</th><th>Decision</th><th>Decided by</th><th>Date</th><th>Note</th></tr>
+{% for o in hist_wo %}<tr><td>{{ o.wo_id }}</td><td>{{ o.title }}</td><td>{{ o.requested_by }}</td><td>{{ badge(o.approval_status) }}</td><td>{{ o.approved_by }}</td><td>{{ o.approved_on }}</td><td>{{ o.decision_note }}</td></tr>{% endfor %}
+{% for r in hist_pr %}<tr><td>{{ r.req_id }}</td><td>{{ r.item }}</td><td>{{ r.requested_by }}</td><td>{{ badge(r.status) }}</td><td>{{ r.decided_by }}</td><td>{{ r.decided_on }}</td><td>{{ r.decision_note }}</td></tr>{% endfor %}
+</table></div>{% endblock %}

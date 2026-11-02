@@ -1,0 +1,12 @@
+{% extends "base.html" %}{% from "_macros.html" import header %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+{{ header(icon, title, 'Sample data: not yet connected to real records') }}
+{% if kind == 'inventory' %}
+<div class="table-wrap"><table><tr><th>Item</th><th>Stock</th><th>Minimum</th></tr>
+{% for i in items %}<tr><td>{{ i.item }}</td><td>{{ i.stock }}</td><td>{{ i.minimum }}</td></tr>{% endfor %}</table></div>
+{% for i in items if i.stock < i.minimum %}<div class="alert red">{{ i.item }} requires replenishment.</div>{% endfor %}
+{% else %}
+{% for v in items %}<div class="card"><h3>{{ v.name }}</h3><div class="progress"><div style="width:{{ v.score }}%"></div></div>
+<p class="muted">Vendor score: {{ v.score }}%</p></div>{% endfor %}
+{% endif %}{% endblock %}

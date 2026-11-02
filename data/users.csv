@@ -1,0 +1,3 @@
+username,full_name,role,salt,hash,email,reset_hash,reset_expires,reset_attempts
+ayodlaws58,Ayodeji Lawson,developer,9aaae73e3b53090f1389dcdb9e9ba380,fae36f63da807ef988626053953dcaf054e2754369f5f076f7a5c278bc4a024a,ayodlaws58@gmail.com,,,
+ayodlaws,Diego Guerro,super_admin,3a497ad8e914ce0ac999027e23496a45,14a13444aa86dd95ccfe03e92a587f6af91cd3893186bedd41429b51b3b2014f,ayodlaws58@outlook.com,,,

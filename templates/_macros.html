@@ -1,0 +1,30 @@
+{% macro header(icon, title, sub='') %}
+<div class="page-header"><h1>{{ icon }} {{ title }}</h1>{% if sub %}<p>{{ sub }}</p>{% endif %}</div>
+{% endmacro %}
+
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
+
+{% macro metric(label, value, color='') %}
+<div class="metric {{ color }}"><div class="l">{{ label }}</div><div class="v">{{ value }}</div></div>
+{% endmacro %}
+
+{% macro badge(text) %}<span class="badge b-{{ text|replace(' ', '-') }}">{{ text }}</span>{% endmacro %}
+
+{% macro due_list(rows) %}
+{% for r in rows %}
+  {% if r.status == 'Overdue' %}
+    <div class="alert red"><b>{{ r.name }}</b> ({{ r.category }}{% if r.location %}, {{ r.location }}{% endif %}) due {{ r.next_service }}, overdue by {{ -r.days_left }} days</div>
+  {% else %}
+    <div class="alert warn"><b>{{ r.name }}</b> ({{ r.category }}{% if r.location %}, {{ r.location }}{% endif %}) due {{ r.next_service }}, in {{ r.days_left }} days</div>
+  {% endif %}
+{% else %}<div class="alert green">Nothing due or overdue.</div>{% endfor %}
+{% endmacro %}
+
+{% macro bars(data, money=False) %}
+{% set top = (data|map(attribute=1)|max) or 1 %}
+{% for name, v in data %}
+  <div class="bar"><span class="name">{{ name }}</span>
+  <div class="track"><div class="fill" style="width:{{ (v / top * 100)|round(1) }}%"></div></div>
+  <span class="val">{{ v|money if money else v }}</span></div>
+{% endfor %}
+{% endmacro %}

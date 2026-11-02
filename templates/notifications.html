@@ -1,0 +1,12 @@
+{% extends "base.html" %}{% from "_macros.html" import header, csrf %}
+{% block title %}Notifications{% endblock %}
+{% block content %}
+{{ header('🔔', 'Notifications', 'Reminders, approvals and updates for you') }}
+<div class="inline" style="margin-bottom:12px">
+<form method="post" action="{{ url_for('notifications_read') }}">{{ csrf() }}<button {{ 'disabled' if not g.unread }}>Mark all as read</button></form>
+<form method="post" action="{{ url_for('notifications_clear') }}">{{ csrf() }}<button class="btn-gray" {{ 'disabled' if not has_read }}>Clear read</button></form></div>
+{% for n in items %}<div class="card inline" style="justify-content:space-between">
+<div>{{ ICONS.get(n.kind, 'ℹ️') }} <b>{{ n.title }}</b>{% if not n.read %} 🔵{% endif %}<div class="muted">{{ n.created }} · {{ n.message }}</div></div>
+{% if not n.read %}<form method="post" action="{{ url_for('notifications_read') }}">{{ csrf() }}<input type="hidden" name="id" value="{{ n.notif_id }}"><button>Read</button></form>{% endif %}
+</div>{% else %}<div class="alert green">You're all caught up.</div>{% endfor %}
+{% endblock %}

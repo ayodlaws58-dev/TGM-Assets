@@ -1,0 +1,8 @@
+{% extends "base.html" %}{% block title %}Forgot password{% endblock %}
+{% block content %}<div class="auth">
+<h1>Reset password</h1><div class="sub">We'll email you a 6-digit code</div>
+<form method="post" class="card"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Username or email</label><input name="identifier" required autofocus>
+  <button>Email me a reset code</button>
+  <p style="text-align:center;margin-bottom:0"><a href="{{ url_for('login') }}">← Back to sign in</a></p>
+</form></div>{% endblock %}

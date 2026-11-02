@@ -1,0 +1,41 @@
+{% extends "base.html" %}{% from "_macros.html" import header, csrf %}
+{% block title %}Users{% endblock %}
+{% block content %}
+{{ header('👥', 'User Management', 'Create accounts, change roles, email users and reset passwords') }}
+{% if not mail_ok %}<div class="alert warn">Email isn't configured, so emails can't be sent. Copy <code>smtp.example.json</code> to <code>smtp.json</code> and fill in your SMTP details.</div>{% endif %}
+
+<details class="card" {{ 'open' if users|length <= 1 }}><summary>➕ Create user</summary>
+<form method="post" action="{{ url_for('user_new') }}" class="form-grid" style="margin-top:12px">{{ csrf() }}
+<div><label>Full name</label><input name="full_name"></div>
+<div><label>Username</label><input name="username" required></div>
+<div><label>Email</label><input name="email" type="email"></div>
+<div><label>Role</label><select name="role">{% for r in allowed %}<option value="{{ r }}" {{ 'selected' if loop.last }}>{{ ROLE_LABEL[r] }}</option>{% endfor %}</select></div>
+<div><label>Temporary password (min 8 chars)</label><input name="password" type="password" minlength="8" required></div>
+<div><label><input type="checkbox" name="send_email" value="1" style="width:auto" {{ 'checked' if mail_ok else 'disabled' }}> Email the login details</label></div>
+<div><button>Create user</button></div></form></details>
+
+<h2>Accounts</h2>
+<div class="table-wrap"><table><tr><th>Username</th><th>Name</th><th>Email</th><th>Role</th></tr>
+{% for u in users %}<tr><td>{{ u.username }}</td><td>{{ u.full_name }}</td><td>{{ u.email }}</td><td><span class="badge b-{{ u.role }}">{{ ROLE_LABEL[u.role] }}</span></td></tr>{% endfor %}
+</table></div>
+
+<h2>Modify an account</h2>
+{% for u in editable %}<details class="card"><summary>{{ u.username }} <span class="badge b-{{ u.role }}">{{ ROLE_LABEL[u.role] }}</span></summary>
+<div class="form-grid" style="margin-top:12px">
+<form method="post" action="{{ url_for('user_role', username=u.username) }}">{{ csrf() }}<label>Role</label>
+<div class="inline"><select name="role">{% for r in allowed %}<option value="{{ r }}" {{ 'selected' if r == u.role }}>{{ ROLE_LABEL[r] }}</option>{% endfor %}</select><button>Update</button></div></form>
+<form method="post" action="{{ url_for('user_email', username=u.username) }}">{{ csrf() }}<label>Email</label>
+<div class="inline"><input name="email" type="email" value="{{ u.email }}"><button>Update</button></div></form>
+<form method="post" action="{{ url_for('user_password', username=u.username) }}">{{ csrf() }}<label>New password</label>
+<div class="inline"><input name="password" type="password" minlength="8" required><button>Reset</button></div></form>
+<form method="post" action="{{ url_for('user_delete', username=u.username) }}" data-confirm="Delete {{ u.username }}?">{{ csrf() }}<label>&nbsp;</label><button class="btn-red">🗑️ Delete</button></form>
+</div></details>
+{% else %}<p class="muted">No accounts you can modify.</p>{% endfor %}
+
+<h2>✉️ Send an email</h2>
+{% if not mail_ok %}<p class="muted">Configure SMTP to enable this.</p>
+{% else %}<form method="post" action="{{ url_for('user_compose') }}" class="card">{{ csrf() }}
+<label>Recipients</label><select name="to" multiple size="5">{% for u in users if u.email %}<option value="{{ u.username }}">{{ u.username }} ({{ u.email }})</option>{% endfor %}</select>
+<label>Subject</label><input name="subject" required><label>Message</label><textarea name="body" required></textarea>
+<p><button>Send</button></p></form>{% endif %}
+{% endblock %}

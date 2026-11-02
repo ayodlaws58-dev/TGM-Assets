@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}Setup{% endblock %}
+{% block content %}<div class="auth">
+<h1>🏭 TGM Assets</h1><div class="sub">First-time setup: create the Developer account</div>
+<form method="post" class="card"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Full name</label><input name="full_name" required>
+  <label>Username</label><input name="username" required>
+  <label>Email (used for password reset)</label><input name="email" type="email">
+  <label>Password (min 8 chars)</label><input name="password" type="password" minlength="8" required>
+  <button>Create developer account</button>
+</form></div>{% endblock %}

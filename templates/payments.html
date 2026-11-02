@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% from "_macros.html" import header, csrf, metric, badge %}
+{% block title %}Payments{% endblock %}
+{% block content %}
+{{ header('💰', 'Payments', 'Costs and payment status of approved work orders') }}
+<div class="grid g4">{{ metric('Total cost', total|money) }}{{ metric('Paid', paid|money, 'green') }}{{ metric('Outstanding', unpaid|money, 'red') }}</div>
+<h2>Approved work orders</h2>
+<div class="table-wrap"><table>
+<tr><th>WO</th><th>Asset</th><th>Title</th><th>Status</th><th>Cost</th><th>Payment</th><th>Paid on</th><th>Update</th></tr>
+{% for r in rows %}<tr><td>{{ r.wo_id }}</td><td>{{ r.asset_id }}</td><td>{{ r.title }}</td><td>{{ r.status }}</td>
+<td>{{ r.cost|float|money }}</td><td>{{ badge(r.payment_status) }}</td><td>{{ r.paid_on }}</td>
+<td><form method="post" action="{{ url_for('payment_save', wo_id=r.wo_id) }}" class="inline">{{ csrf() }}
+<input type="number" name="cost" min="0" step="0.01" value="{{ r.cost or 0 }}" style="width:110px">
+<select name="payment_status">{% for p in pay_statuses %}<option {{ 'selected' if p == r.payment_status }}>{{ p }}</option>{% endfor %}</select>
+<button>Save</button></form></td></tr>
+{% else %}<tr><td colspan="8" class="muted">No approved work orders yet.</td></tr>{% endfor %}
+</table></div>{% endblock %}

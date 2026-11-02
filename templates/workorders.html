@@ -1,0 +1,33 @@
+{% extends "base.html" %}{% from "_macros.html" import header, csrf, badge %}
+{% block title %}Work orders{% endblock %}
+{% block content %}
+{{ header('📋', 'Work Orders', 'Request work. It needs approval before it can start') }}
+<details class="card"><summary>➕ Request a work order (needs approval)</summary>
+{% if assets %}<form method="post" action="{{ url_for('workorder_new') }}" class="form-grid" style="margin-top:12px">{{ csrf() }}
+<div><label>Asset</label><select name="asset_id">{% for a in assets %}<option value="{{ a.asset_id }}">{{ a.asset_id }} - {{ a.name }}</option>{% endfor %}</select></div>
+<div><label>Title</label><input name="title" placeholder="Oil change, Repaint building" required></div>
+<div><label>Priority</label><select name="priority">{% for p in priorities %}<option {{ 'selected' if p == 'Medium' }}>{{ p }}</option>{% endfor %}</select></div>
+<div><label>Assigned to</label><input name="assigned_to"></div>
+<div><label>Due date</label><input type="date" name="due" value="{{ today }}"></div>
+<div><label>Estimated cost ($)</label><input type="number" name="cost" min="0" step="0.01" value="0"></div>
+<div style="grid-column:1/-1"><label>Description</label><textarea name="description"></textarea></div>
+<div><button>Submit request</button></div></form>
+{% else %}<p class="muted">No assets yet. A Super Admin needs to add them first.</p>{% endif %}</details>
+
+<div class="kanban">
+{% for s in statuses %}<div><h3>{{ s }} ({{ board[s]|length }})</h3>
+{% for o in board[s] %}
+  {% set ok = o.approval_status == 'Approved' %}
+  <div class="wo"><b>{{ o.wo_id }}</b> · {{ o.title }}
+    <div class="muted">{{ o.asset_id }} · {{ o.priority }} · due {{ o.due or 'n/a' }}
+    {% if ok and s != 'Completed' and o.due and o.due < today %}⚠️ overdue{% endif %}
+    {% if o.assigned_to %} · {{ o.assigned_to }}{% endif %} · by {{ o.requested_by or 'n/a' }}</div>
+    <div>{{ badge(o.approval_status) }}{% if o.decision_note %} <span class="muted">{{ o.decision_note }}</span>{% endif %}</div>
+    {% if o.description %}<p>{{ o.description }}</p>{% endif %}
+    {% if has_role('admin') and ok %}
+    <form method="post" action="{{ url_for('workorder_status', wo_id=o.wo_id) }}" class="inline">{{ csrf() }}
+      <select name="status">{% for t in statuses %}<option {{ 'selected' if t == s }}>{{ t }}</option>{% endfor %}</select>
+      <button>Move</button></form>{% endif %}
+  </div>
+{% else %}<p class="muted">None</p>{% endfor %}</div>{% endfor %}
+</div>{% endblock %}

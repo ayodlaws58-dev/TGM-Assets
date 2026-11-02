@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% from "_macros.html" import header, csrf %}
+{% block title %}My profile{% endblock %}
+{% block content %}
+{{ header('🙍', 'My Profile', 'Your email is used for notifications and password reset') }}
+<p><b>{{ g.user.full_name or g.user.username }}</b> · {{ ROLE_LABEL[g.user.role] }}</p>
+<div class="grid g2">
+<form method="post" class="card">{{ csrf() }}<input type="hidden" name="form" value="email">
+<label>Email</label><input name="email" type="email" value="{{ g.user.email }}"><p><button>Save email</button></p></form>
+<form method="post" class="card">{{ csrf() }}<input type="hidden" name="form" value="password">
+<label>New password (min 8 chars)</label><input name="password" type="password" minlength="8" required><p><button>Change password</button></p></form>
+</div>{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}{% from "_macros.html" import header, csrf, badge %}
+{% block title %}Assets{% endblock %}
+{% block content %}
+{{ header('📦', 'Asset Registry', 'Generators, buildings, painting and other tracked assets') }}
+<form method="get" class="form-grid card">
+  <div><label>Search</label><input name="q" value="{{ q }}" placeholder="Name, location or category"></div>
+  <div><label>Category</label><select name="category"><option value="">All</option>
+    {% for c in categories %}<option {{ 'selected' if c == cat }}>{{ c }}</option>{% endfor %}</select></div>
+  <div><button>Filter</button></div>
+</form>
+<div class="table-wrap"><table>
+<tr><th>ID</th><th>Name</th><th>Category</th><th>Type</th><th>Location</th><th>Last done</th><th>Interval</th>
+<th>Next due</th><th>Days left</th><th>Status</th>{% if has_role('super_admin') %}<th></th>{% endif %}</tr>
+{% for r in rows %}<tr><td>{{ r.asset_id }}</td><td>{{ r.name }}</td><td>{{ r.category }}</td><td>{{ r.kind }}</td>
+<td>{{ r.location }}</td><td>{{ r.last_service }}</td><td>{{ r.interval_days }}d</td><td>{{ r.next_service }}</td>
+<td>{{ r.days_left if r.days_left is not none else '' }}</td><td>{{ badge(r.status) }}</td>
+{% if has_role('super_admin') %}<td class="inline"><a class="btn btn-gray" href="{{ url_for('asset_edit', asset_id=r.asset_id) }}">Edit</a>
+<form method="post" action="{{ url_for('asset_delete', asset_id=r.asset_id) }}" data-confirm="Delete {{ r.name }}?">{{ csrf() }}
+<button class="btn-red">Delete</button></form></td>{% endif %}</tr>
+{% else %}<tr><td colspan="11" class="muted">No assets found.</td></tr>{% endfor %}
+</table></div>
+
+{% if has_role('super_admin') %}
+<details class="card"><summary>➕ Add an asset</summary><form method="post" action="{{ url_for('asset_new') }}" class="form-grid" style="margin-top:12px">
+{{ csrf() }}
+<div><label>Name</label><input name="name" placeholder="Generator #3, Main building" required></div>
+<div><label>Category</label><select name="category">{% for c in categories %}<option>{{ c }}</option>{% endfor %}</select></div>
+<div><label>Location</label><input name="location"></div>
+<div><label>Service / repaint interval (days)</label><input name="interval_days" type="number" min="1" value="180" required></div>
+<div><label>Last serviced / painted</label><input name="last_service" type="date" required></div>
+<div><label>Notes</label><input name="notes"></div>
+<div><button>Add asset</button></div></form></details>
+{% endif %}
+{% endblock %}
