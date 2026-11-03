@@ -1,4 +1,5 @@
 import hmac
+import os
 import secrets
 import threading
 import time
@@ -19,6 +20,8 @@ MAX_FAILS, LOCK_SECONDS = 5, 300
 
 
 def _secret_key():
+    if os.environ.get("SECRET_KEY"):
+        return os.environ["SECRET_KEY"]
     if not SECRET_FILE.exists():
         SECRET_FILE.write_text(secrets.token_hex(32))
     return SECRET_FILE.read_text().strip()
@@ -217,6 +220,25 @@ def login():
 @app.post("/logout")
 def logout():
     session.clear()
+    return redirect(url_for("login"))
+
+
+@app.get("/invite")
+def invite():
+    return render_template("invite.html")
+
+
+@app.post("/invite/accept")
+def invite_accept():
+    if request.form.get("invite_type") != "invite":
+        flash("That invitation link is invalid or expired.", "error")
+        return redirect(url_for("login"))
+    err = auth.accept_invite(request.form.get("access_token", ""),
+                             request.form.get("password", ""))
+    if err:
+        flash(err, "error")
+        return redirect(url_for("invite"))
+    flash("Password set. You can now sign in.", "success")
     return redirect(url_for("login"))
 
 
@@ -690,9 +712,9 @@ def user_password(username):
 @app.post("/users/<username>/delete")
 @login_required("admin")
 def user_delete(username):
-    users = _manageable_target(username)
-    auth.save_users(users[users["username"] != username])
-    flash("User deleted.", "success")
+    _manageable_target(username)
+    err = auth.delete_user(username)
+    flash(err or "User deleted.", "error" if err else "success")
     return redirect(url_for("users_page"))
 
 

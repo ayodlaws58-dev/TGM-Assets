@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% block title %}Accept invitation{% endblock %}
+{% block content %}<div class="auth">
+<h1>Set your password</h1><div class="sub">Create a password to finish setting up your account.</div>
+<form method="post" action="{{ url_for('invite_accept') }}" class="card" id="invite-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="access_token" id="access-token">
+  <input type="hidden" name="invite_type" id="invite-type">
+  <label>New password (min 8 characters)</label><input name="password" type="password" minlength="8" required autofocus>
+  <button id="invite-submit" disabled>Set password</button>
+  <p id="invite-error" class="muted" role="status">Validating invitation link…</p>
+</form></div>
+<script src="{{ url_for('static', filename='invite.js') }}" defer></script>
+{% endblock %}
