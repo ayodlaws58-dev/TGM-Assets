@@ -5,5 +5,5 @@
   <label>Username or email</label><input name="username" autocomplete="username" required autofocus>
   <label>Password</label><input name="password" type="password" autocomplete="current-password" required>
   <button>Sign in</button>
-  <p style="text-align:center;margin-bottom:0"><a href="{{ url_for('forgot') }}">Forgot password?</a></p>
+  <p style="text-align:center;margin-bottom:0"><a href="{{ url_for('forgot') }}">Forgot password?</a> · <a href="{{ url_for('signup') }}">Sign up</a></p>
 </form></div>{% endblock %}

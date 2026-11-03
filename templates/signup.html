@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% block title %}Sign up{% endblock %}
+{% block content %}<div class="auth">
+<h1><img class="logo-lg" src="{{ logo_url() }}" alt="TGM Assets logo"><br>TGM Assets</h1><div class="sub">Create your account</div>
+<form method="post" class="card"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Full name</label><input name="full_name" autocomplete="name" required autofocus>
+  <label>Username</label><input name="username" autocomplete="username" required>
+  <label>Email</label><input name="email" type="email" autocomplete="email" required>
+  <label>Password (min 8 chars)</label><input name="password" type="password" minlength="8" autocomplete="new-password" required>
+  <button>Sign up</button>
+  <p style="text-align:center;margin-bottom:0"><a href="{{ url_for('login') }}">Already have an account? Sign in</a></p>
+</form></div>{% endblock %}

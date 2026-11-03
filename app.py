@@ -217,6 +217,30 @@ def login():
     return render_template("login.html")
 
 
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+    if not auth.load_users().shape[0]:
+        return redirect(url_for("setup"))
+    if g.user:
+        return redirect(url_for("dashboard"))
+    if request.method == "POST":
+        key = (request.remote_addr, "signup")
+        if _throttled(key):
+            flash("Too many sign-up attempts. Try again in a few minutes.", "error")
+        else:
+            count, first = FAILS.get(key, (0, time.time()))
+            FAILS[key] = (count + 1, first)
+            err = auth.add_user(request.form.get("username", ""), request.form.get("full_name", ""), "user",
+                                request.form.get("password", ""), request.form.get("email", ""))
+            if err:
+                flash(err, "error")
+            else:
+                FAILS.pop(key, None)
+                flash("Account created. Please sign in.", "success")
+                return redirect(url_for("login"))
+    return render_template("signup.html")
+
+
 @app.post("/logout")
 def logout():
     session.clear()
