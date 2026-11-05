@@ -247,25 +247,6 @@ def logout():
     return redirect(url_for("login"))
 
 
-@app.get("/invite")
-def invite():
-    return render_template("invite.html")
-
-
-@app.post("/invite/accept")
-def invite_accept():
-    if request.form.get("invite_type") != "invite":
-        flash("That invitation link is invalid or expired.", "error")
-        return redirect(url_for("login"))
-    err = auth.accept_invite(request.form.get("access_token", ""),
-                             request.form.get("password", ""))
-    if err:
-        flash(err, "error")
-        return redirect(url_for("invite"))
-    flash("Password set. You can now sign in.", "success")
-    return redirect(url_for("login"))
-
-
 @app.route("/forgot", methods=["GET", "POST"])
 def forgot():
     if request.method == "POST":

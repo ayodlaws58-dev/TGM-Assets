@@ -1,4 +1,5 @@
 flask>=3.0
 pandas
-supabase>=2.0,<3.0
+PyMySQL>=1.1
+cryptography
 gunicorn>=22.0
