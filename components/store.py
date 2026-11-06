@@ -26,6 +26,9 @@ PR_COMMITTED = ["Approved", "Ordered", "Received"]
 
 
 def _load(name, cols):
+    from components import database
+    if not database.use_csv_backend():
+        return database.dataframe(Path(name).stem, cols)
     try:
         df = pd.read_csv(DATA / name, dtype=str).fillna("")
     except (FileNotFoundError, pd.errors.EmptyDataError):
@@ -52,15 +55,23 @@ def load_procurement():
 
 
 def save_assets(df):
-    df.to_csv(DATA / "assets.csv", index=False)
+    _save("assets", df, ASSET_COLS)
 
 
 def save_work_orders(df):
-    df.to_csv(DATA / "work_orders.csv", index=False)
+    _save("work_orders", df, WO_COLS)
 
 
 def save_procurement(df):
-    df.to_csv(DATA / "procurement.csv", index=False)
+    _save("procurement", df, PR_COLS)
+
+
+def _save(table, df, columns):
+    from components import database
+    if database.use_csv_backend():
+        df.to_csv(DATA / f"{table}.csv", index=False)
+    else:
+        database.save_table(table, df, columns)
 
 
 def add_row(df, **values):

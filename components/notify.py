@@ -2,7 +2,7 @@ from datetime import date
 
 import pandas as pd
 
-from components import auth, mailer, store
+from components import auth, database, mailer, store
 
 FILE = store.DATA / "notifications.csv"
 COLS = ["notif_id", "username", "kind", "title", "message", "created", "read", "key"]
@@ -11,6 +11,8 @@ KIND_LABEL = {"reminder": "Reminder", "overdue": "Overdue", "approval": "Decisio
 
 
 def _load():
+    if not database.use_csv_backend():
+        return database.dataframe("notifications", COLS)
     try:
         df = pd.read_csv(FILE, dtype=str).fillna("")
     except (FileNotFoundError, pd.errors.EmptyDataError):
@@ -19,7 +21,10 @@ def _load():
 
 
 def _save(df):
-    df.to_csv(FILE, index=False)
+    if database.use_csv_backend():
+        df.to_csv(FILE, index=False)
+    else:
+        database.save_table("notifications", df, COLS)
 
 
 def recipients(minimum, exclude=()):

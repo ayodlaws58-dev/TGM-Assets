@@ -9,6 +9,7 @@ from components import auth, notify, store
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
+    monkeypatch.setenv("TGM_DATABASE_BACKEND", "csv")
     monkeypatch.setattr(store, "DATA", tmp_path)
     monkeypatch.setattr(auth, "USERS_FILE", tmp_path / "users.csv")
     monkeypatch.setattr(notify, "FILE", tmp_path / "notifications.csv")
