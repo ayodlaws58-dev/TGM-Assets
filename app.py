@@ -751,7 +751,9 @@ def profile():
             err = auth.set_password(g.user["username"], request.form.get("password", ""))
             flash(err or "Password updated.", "error" if err else "success")
         return redirect(url_for("profile"))
-    return render_template("profile.html")
+    items = notify.for_user(g.user["username"])
+    return render_template("profile.html", notification_count=len(items),
+                           latest_notification=items.iloc[0]["created"] if not items.empty else None)
 
 
 # ---------- settings (developer): logo and SMTP ----------

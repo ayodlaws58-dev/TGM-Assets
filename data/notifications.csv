@@ -1,4 +1,4 @@
 notif_id,username,kind,title,message,created,read,key
 N-1,ayodlaws58,request,Work order awaiting approval,oil change requested by ayodlaws.,2026-11-02,1,
 N-2,ayodlaws58,request,Procurement request awaiting approval,AC spare parts × 1 requested by ayodlaws.,2026-11-03,1,
-N-3,ayodlaws,approval,PR-2001 approved,AC spare parts was approved by ayodlaws58.,2026-11-03,,
+N-3,ayodlaws,approval,PR-2001 approved,AC spare parts was approved by ayodlaws58.,2026-11-03,1,

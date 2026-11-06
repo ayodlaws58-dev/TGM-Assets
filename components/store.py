@@ -2,8 +2,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from components import database
-
 DATA = Path(__file__).resolve().parent.parent / "data"
 
 ASSET_COLS = ["asset_id", "name", "category", "location", "last_service", "interval_days", "notes"]
@@ -28,10 +26,6 @@ PR_COMMITTED = ["Approved", "Ordered", "Received"]
 
 
 def _load(name, cols):
-    if not database.use_csv_backend():
-        table = Path(name).stem
-        df = database.dataframe(table, cols)
-        return df.reindex(columns=cols).fillna("")
     try:
         df = pd.read_csv(DATA / name, dtype=str).fillna("")
     except (FileNotFoundError, pd.errors.EmptyDataError):
@@ -58,24 +52,15 @@ def load_procurement():
 
 
 def save_assets(df):
-    if database.use_csv_backend():
-        df.to_csv(DATA / "assets.csv", index=False)
-    else:
-        database.save_table("assets", df, ASSET_COLS)
+    df.to_csv(DATA / "assets.csv", index=False)
 
 
 def save_work_orders(df):
-    if database.use_csv_backend():
-        df.to_csv(DATA / "work_orders.csv", index=False)
-    else:
-        database.save_table("work_orders", df, WO_COLS)
+    df.to_csv(DATA / "work_orders.csv", index=False)
 
 
 def save_procurement(df):
-    if database.use_csv_backend():
-        df.to_csv(DATA / "procurement.csv", index=False)
-    else:
-        database.save_table("procurement", df, PR_COLS)
+    df.to_csv(DATA / "procurement.csv", index=False)
 
 
 def add_row(df, **values):

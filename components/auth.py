@@ -7,8 +7,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from components import database
-
 USERS_FILE = Path(__file__).resolve().parent.parent / "data" / "users.csv"
 COLS = ["username", "full_name", "role", "salt", "hash", "email",
         "reset_hash", "reset_expires", "reset_attempts"]
@@ -26,8 +24,6 @@ def hash_password(password, salt):
 
 
 def load_users():
-    if not database.use_csv_backend():
-        return database.dataframe("users", COLS)
     try:
         df = pd.read_csv(USERS_FILE, dtype=str).fillna("")
     except (FileNotFoundError, pd.errors.EmptyDataError):
@@ -39,10 +35,7 @@ def load_users():
 
 
 def save_users(df):
-    if database.use_csv_backend():
-        df.to_csv(USERS_FILE, index=False)
-    else:
-        database.save_table("users", df, COLS)
+    df.to_csv(USERS_FILE, index=False)
 
 
 def _email_taken(users, email, exclude=None):

@@ -4,8 +4,6 @@ import os
 import re
 from datetime import date, timedelta
 
-os.environ["TGM_DATABASE_BACKEND"] = "csv"
-
 from app import app, auth
 
 

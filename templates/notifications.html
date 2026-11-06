@@ -2,11 +2,37 @@
 {% block title %}Notifications{% endblock %}
 {% block content %}
 {{ header('Notifications', 'Reminders, approvals and updates for you') }}
-<div class="inline" style="margin-bottom:12px">
-<form method="post" action="{{ url_for('notifications_read') }}">{{ csrf() }}<button {{ 'disabled' if not g.unread }}>Mark all as read</button></form>
-<form method="post" action="{{ url_for('notifications_clear') }}">{{ csrf() }}<button class="btn-gray" {{ 'disabled' if not has_read }}>Clear read</button></form></div>
-{% for n in items %}<div class="card inline" style="justify-content:space-between">
-<div><span class="tag t-{{ n.kind }}">{{ KIND_LABEL.get(n.kind, 'Info') }}</span> <b>{{ n.title }}</b>{% if not n.read %} <span class="dot" title="Unread"></span>{% endif %}<div class="muted">{{ n.created }} · {{ n.message }}</div></div>
-{% if not n.read %}<form method="post" action="{{ url_for('notifications_read') }}">{{ csrf() }}<input type="hidden" name="id" value="{{ n.notif_id }}"><button>Read</button></form>{% endif %}
-</div>{% else %}<div class="alert green">You're all caught up.</div>{% endfor %}
+<div class="notification-toolbar">
+  <p class="muted">Hover or focus a notification for a preview. Select it for full details.</p>
+  <div class="inline notification-actions">
+    <form method="post" action="{{ url_for('notifications_read') }}">{{ csrf() }}<button {{ 'disabled' if not g.unread }}>Mark all as read</button></form>
+    <form method="post" action="{{ url_for('notifications_clear') }}">{{ csrf() }}<button class="btn-gray" {{ 'disabled' if not has_read }}>Clear read</button></form>
+  </div>
+</div>
+{% for n in items %}
+<article class="card notification-card {{ 'notification-unread' if not n.read else '' }}">
+  <details class="notification-details">
+    <summary class="notification-summary">
+      <span class="notification-heading">
+        <span class="tag t-{{ n.kind }}">{{ KIND_LABEL.get(n.kind, 'Info') }}</span>
+        <strong>{{ n.title }}</strong>
+        {% if not n.read %}<span class="notification-status">Unread</span>{% endif %}
+        <span class="muted notification-date">{{ n.created or 'Date unavailable' }}</span>
+      </span>
+      <span class="notification-expand">More details</span>
+      <span class="notification-tooltip" aria-hidden="true">{{ n.message or 'No additional message.' }}</span>
+    </summary>
+    <div class="notification-body">
+      <h3>Details</h3>
+      <p class="notification-message">{{ n.message or 'No additional message.' }}</p>
+      <dl class="notification-meta">
+        <div><dt>Type</dt><dd>{{ KIND_LABEL.get(n.kind, 'Info') }}</dd></div>
+        <div><dt>Date</dt><dd>{{ n.created or 'Unavailable' }}</dd></div>
+        <div><dt>Status</dt><dd>{{ 'Unread' if not n.read else 'Read' }}</dd></div>
+      </dl>
+    </div>
+  </details>
+  {% if not n.read %}<form method="post" action="{{ url_for('notifications_read') }}" class="notification-read">{{ csrf() }}<input type="hidden" name="id" value="{{ n.notif_id }}"><button>Mark as read</button></form>{% endif %}
+</article>
+{% else %}<div class="alert green">You're all caught up. New notifications will appear here.</div>{% endfor %}
 {% endblock %}

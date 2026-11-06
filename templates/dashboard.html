@@ -3,33 +3,66 @@
 {% block content %}
 {{ header('Dashboard', 'Welcome back, ' ~ (g.user.full_name or g.user.username)) }}
 
-<h2>Work orders</h2>
+<section class="priority-section" aria-labelledby="priority-title">
+  <div class="section-heading">
+    <div><h2 id="priority-title">Needs attention</h2><p class="muted">Start with the items that need action.</p></div>
+  </div>
+  <div class="priority-grid">
+    {% if has_role('admin') %}
+    <a class="priority-card {{ 'priority-red' if stats.pending_wo or stats.pending_pr else '' }}" href="{{ url_for('approvals') }}">
+      <span class="priority-label">Pending approvals</span>
+      <strong>{{ stats.pending_wo + stats.pending_pr }}</strong>
+      <span>{{ stats.pending_wo }} work order(s), {{ stats.pending_pr }} procurement request(s)</span>
+      <b>{{ 'Review approvals' if stats.pending_wo or stats.pending_pr else 'View approvals' }} →</b>
+    </a>
+    {% endif %}
+    <a class="priority-card {{ 'priority-red' if stats.late else '' }}" href="{{ url_for('workorders') }}">
+      <span class="priority-label">Overdue work orders</span>
+      <strong>{{ stats.late }}</strong>
+      <span>Approved work that has passed its due date</span>
+      <b>View work orders →</b>
+    </a>
+    <a class="priority-card {{ 'priority-red' if stats.overdue_assets else ('priority-amber' if serv|length or paint|length else '') }}" href="{{ url_for('maintenance') }}">
+      <span class="priority-label">Maintenance due soon or overdue</span>
+      <strong>{{ serv|length + paint|length }}</strong>
+      <span>{{ serv|length }} servicing, {{ paint|length }} repainting</span>
+      <b>Open maintenance →</b>
+    </a>
+  </div>
+  <div class="quick-actions">
+    <a class="btn" href="{{ url_for('workorders') }}">Request work order</a>
+    {% if has_role('super_admin') %}<a class="btn btn-gray" href="{{ url_for('assets_page') }}">Manage assets</a>{% endif %}
+    {% if has_role('admin') %}<a class="btn btn-gray" href="{{ url_for('approvals') }}">Review approvals</a>{% endif %}
+  </div>
+</section>
+
+<h2>Overview</h2>
+<p class="muted dashboard-intro">Expand a section for details.</p>
+<details class="card dashboard-details">
+<summary>Work orders <span class="muted">{{ stats.open }} open</span></summary>
 <div class="grid g4">
   {{ metric('Total', stats.total) }}{{ metric('Open', stats.open) }}
   {{ metric('Overdue', stats.late, 'red') }}{{ metric('Awaiting approval', stats.pending_wo, 'amber') }}
 </div>
-<h2>Payments</h2>
+<div class="dashboard-chart"><h3>Work orders by status</h3>{{ bars(chart_status) }}</div>
+</details>
+<details class="card dashboard-details">
+<summary>Payments <span class="muted">{{ stats.unpaid|money }} outstanding</span></summary>
 <div class="grid g4">
   {{ metric('Total work-order cost', stats.cost|money) }}{{ metric('Paid', stats.paid|money, 'green') }}
   {{ metric('Outstanding', stats.unpaid|money, 'red') }}{{ metric('Procurement committed', stats.committed|money) }}
 </div>
-<h2>Assets &amp; buildings</h2>
+<div class="dashboard-chart"><h3>Cost by payment status</h3>{{ bars(chart_pay, money=True) }}</div>
+</details>
+<details class="card dashboard-details">
+<summary>Assets &amp; buildings <span class="muted">{{ stats.overdue_assets }} overdue</span></summary>
 <div class="grid g4">
   {{ metric('Servicing due (within 14 days)', serv|length, 'amber') }}{{ metric('Repainting due (within 14 days)', paint|length, 'amber') }}
   {{ metric('Overdue (all)', stats.overdue_assets, 'red') }}{{ metric('Procurement awaiting approval', stats.pending_pr, 'amber') }}
 </div>
-
-{% if has_role('admin') and (stats.pending_wo or stats.pending_pr) %}
-<div class="alert warn" style="margin-top:14px">{{ stats.pending_wo }} work order(s) and {{ stats.pending_pr }}
-  procurement request(s) are waiting for a decision. <a href="{{ url_for('approvals') }}">Open approvals</a></div>
-{% endif %}
-
-<div class="grid g2" style="margin-top:14px">
-  <div><h2>Servicing due</h2>{{ due_list(serv) }}</div>
-    <div><h2>Repainting due</h2>{{ due_list(paint) }}</div>
-</div>
 <div class="grid g2">
-  <div class="card"><h3>Work orders by status</h3>{{ bars(chart_status) }}</div>
-  <div class="card"><h3>Cost by payment status</h3>{{ bars(chart_pay, money=True) }}</div>
+  <div><h2>Servicing due</h2>{{ due_list(serv) }}</div>
+  <div><h2>Repainting due</h2>{{ due_list(paint) }}</div>
 </div>
+</details>
 {% endblock %}

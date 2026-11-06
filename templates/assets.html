@@ -2,22 +2,31 @@
 {% block title %}Assets{% endblock %}
 {% block content %}
 {{ header('Asset Registry', 'Generators, ACs, buildings, painting, furniture repairs and other tracked assets') }}
-<form method="get" class="form-grid card">
-  <div><label>Search</label><input name="q" value="{{ q }}" placeholder="Name, location or category"></div>
+<form method="get" class="form-grid card filter-form">
+  <div><label for="asset-search">Search assets</label><input id="asset-search" name="q" value="{{ q }}" placeholder="Name, location or category"></div>
   <div><label>Category</label><select name="category"><option value="">All</option>
     {% for c in categories %}<option {{ 'selected' if c == cat }}>{{ c }}</option>{% endfor %}</select></div>
-  <div><button>Filter</button></div>
+  <div class="inline"><button>Apply filters</button>{% if q or cat %}<a class="btn btn-gray" href="{{ url_for('assets_page') }}">Clear</a>{% endif %}</div>
 </form>
+<p class="muted result-count" aria-live="polite">{{ rows|length }} asset(s){% if q or cat %} match your filters{% endif %}</p>
 <div class="table-wrap"><table>
-<tr><th>ID</th><th>Name</th><th>Category</th><th>Type</th><th>Location</th><th>Last done</th><th>Interval</th>
-<th>Next due</th><th>Days left</th><th>Status</th>{% if has_role('super_admin') %}<th></th>{% endif %}</tr>
-{% for r in rows %}<tr><td>{{ r.asset_id }}</td><td>{{ r.name }}</td><td>{{ r.category }}</td><td>{{ r.kind }}</td>
-<td>{{ r.location }}</td><td>{{ r.last_service }}</td><td>{{ r.interval_days }}d</td><td>{{ r.next_service }}</td>
-<td>{{ r.days_left if r.days_left is not none else '' }}</td><td>{{ badge(r.status) }}</td>
-{% if has_role('super_admin') %}<td class="inline"><a class="btn btn-gray" href="{{ url_for('asset_edit', asset_id=r.asset_id) }}">Edit</a>
+<tr><th>ID</th><th>Asset</th><th>Location</th><th>Next due</th><th>Days left</th><th>Status</th><th>Details</th>{% if has_role('super_admin') %}<th>Actions</th>{% endif %}</tr>
+{% for r in rows %}<tr>
+<td>{{ r.asset_id }}</td><td><strong>{{ r.name }}</strong><br><span class="muted">{{ r.category }} · {{ r.kind }}</span></td>
+<td>{{ r.location or '—' }}</td><td>{{ r.next_service or 'Not scheduled' }}</td>
+<td>{{ r.days_left if r.days_left is not none else '—' }}</td><td>{{ badge(r.status) }}</td>
+<td><details class="asset-more"><summary>More</summary><dl>
+  <dt>Last serviced / painted</dt><dd>{{ r.last_service or '—' }}</dd>
+  <dt>Interval</dt><dd>{{ r.interval_days }} days</dd>
+  <dt>Notes</dt><dd>{{ r.notes or 'No notes' }}</dd>
+</dl></details></td>
+{% if has_role('super_admin') %}<td><div class="action-stack"><a class="btn btn-gray" href="{{ url_for('asset_edit', asset_id=r.asset_id) }}">Edit</a>
 <form method="post" action="{{ url_for('asset_delete', asset_id=r.asset_id) }}" data-confirm="Delete {{ r.name }}?">{{ csrf() }}
-<button class="btn-red">Delete</button></form></td>{% endif %}</tr>
-{% else %}<tr><td colspan="11" class="muted">No assets found.</td></tr>{% endfor %}
+<button class="btn-red">Delete</button></form></div></td>{% endif %}</tr>
+{% else %}<tr><td colspan="{{ 8 if has_role('super_admin') else 7 }}" class="empty-cell">
+  {% if q or cat %}<strong>No matching assets</strong><br>Try a different search or category, or clear the filters.
+  {% else %}<strong>No assets yet</strong><br>{% if has_role('super_admin') %}Add your first asset below to begin tracking maintenance.{% else %}Ask a Super Admin to add assets so maintenance can be tracked.{% endif %}{% endif %}
+</td></tr>{% endfor %}
 </table></div>
 
 {% if has_role('super_admin') %}

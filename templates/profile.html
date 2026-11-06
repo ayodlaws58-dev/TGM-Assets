@@ -1,11 +1,46 @@
 {% extends "base.html" %}{% from "_macros.html" import header, csrf %}
 {% block title %}My profile{% endblock %}
 {% block content %}
-{{ header('My Profile', 'Your email is used for notifications and password reset') }}
-<p><b>{{ g.user.full_name or g.user.username }}</b> · {{ ROLE_LABEL[g.user.role] }}</p>
-<div class="grid g2">
-<form method="post" class="card">{{ csrf() }}<input type="hidden" name="form" value="email">
-<label>Email</label><input name="email" type="email" value="{{ g.user.email }}"><p><button>Save email</button></p></form>
-<form method="post" class="card">{{ csrf() }}<input type="hidden" name="form" value="password">
-<label>New password (min 8 chars)</label><input name="password" type="password" minlength="8" required><p><button>Change password</button></p></form>
+{{ header('My Profile', 'View your account details and manage your settings') }}
+<section class="card profile-overview" aria-labelledby="account-heading">
+  <div class="profile-avatar" aria-hidden="true">{{ (g.user.full_name or g.user.username)[:1]|upper }}</div>
+  <div>
+    <h2 id="account-heading">{{ g.user.full_name or g.user.username }}</h2>
+    <p class="muted">Account overview</p>
+    <span class="badge b-{{ g.user.role }}">{{ ROLE_LABEL[g.user.role] }}</span>
+  </div>
+</section>
+<div class="grid g2 profile-grid">
+  <section class="card" aria-labelledby="profile-details-heading">
+    <h2 id="profile-details-heading">Account details</h2>
+    <dl class="profile-details">
+      <div><dt>Full name</dt><dd>{{ g.user.full_name or 'Not provided' }}</dd></div>
+      <div><dt>Username</dt><dd>{{ g.user.username }}</dd></div>
+      <div><dt>Role</dt><dd>{{ ROLE_LABEL[g.user.role] }}</dd></div>
+      <div><dt>Email</dt><dd>{{ g.user.email or 'Not set' }}</dd></div>
+    </dl>
+  </section>
+  <section class="card" aria-labelledby="profile-notifications-heading">
+    <h2 id="profile-notifications-heading">Notifications</h2>
+    <dl class="profile-details">
+      <div><dt>Unread</dt><dd>{{ g.unread }}</dd></div>
+      <div><dt>Total</dt><dd>{{ notification_count }}</dd></div>
+      <div><dt>Most recent</dt><dd>{{ latest_notification or 'None yet' }}</dd></div>
+    </dl>
+    <a class="btn btn-gray" href="{{ url_for('notifications') }}">View notifications</a>
+  </section>
+</div>
+<div class="grid g2 profile-grid">
+  <form method="post" class="card">{{ csrf() }}<input type="hidden" name="form" value="email">
+    <h2>Email address</h2>
+    <p class="muted" id="profile-email-help">Used for notifications and password reset. Leave blank to remove it.</p>
+    <label for="profile-email">Email</label><input id="profile-email" name="email" type="email" value="{{ g.user.email }}" autocomplete="email" aria-describedby="profile-email-help">
+    <p><button>Save email</button></p>
+  </form>
+  <form method="post" class="card">{{ csrf() }}<input type="hidden" name="form" value="password">
+    <h2>Password</h2>
+    <p class="muted" id="profile-password-help">Choose a password with at least 8 characters.</p>
+    <label for="profile-password">New password</label><input id="profile-password" name="password" type="password" minlength="8" required autocomplete="new-password" aria-describedby="profile-password-help">
+    <p><button>Change password</button></p>
+  </form>
 </div>{% endblock %}

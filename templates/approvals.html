@@ -5,8 +5,8 @@
 
 {% macro decision(url, requester) %}
 {% if may_decide(requester) %}
-<form method="post" action="{{ url }}">{{ csrf() }}
-  <div class="inline" style="margin-top:8px"><input name="note" placeholder="Note (required to reject)" style="flex:1;width:auto">
+<form method="post" action="{{ url }}" class="decision-form">{{ csrf() }}
+  <div class="inline" style="margin-top:8px"><input name="note" aria-label="Decision note" placeholder="Optional for approval; required to reject" style="flex:1;width:auto">
   <button name="decision" value="Approved"   class="btn-green">Approve</button>
     <button name="decision" value="Rejected" class="btn-red">Reject</button></div></form>
 {% else %}<p class="muted">You requested this. Another approver must decide.</p>{% endif %}
