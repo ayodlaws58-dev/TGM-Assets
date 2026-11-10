@@ -1,7 +1,7 @@
 {
-  "host": "ayodlaws58@gmail.com",
+  "host": "smtp.gmail.com",
   "port": 587,
-  "user": "ayodlaws58",
+  "user": "ayodlaws58@gmail.com",
   "password": "Neymar11$",
   "sender": "frontdesk@tgmeducation.net"
 }
