@@ -52,9 +52,10 @@ Switching back does not copy MySQL changes into CSV.
 
 The app replaces whole tables on writes, so run **one application process only**,
 with no external writers or concurrent import. In particular use one Gunicorn
-worker. Multiple processes can otherwise overwrite each other's changes. The
-uploaded asset files, logo, SMTP configuration and generated secret key remain local files; configure
-`SECRET_KEY` and `SMTP_*` environment variables for hosted deployments.
+worker. Multiple processes can otherwise overwrite each other's changes. The uploaded asset files, logo, SMTP configuration and generated secret key remain local
+files. For hosted deployments, configure `SECRET_KEY` and either `RESEND_API_KEY` plus
+`RESEND_FROM_EMAIL`, or the `SMTP_*` environment variables. Resend takes precedence
+over SMTP when an API key is set; verify the sender domain with Resend before sending.
 
 Asset depreciation uses the straight-line method: purchase cost less salvage value,
 spread across the recorded useful life. Book value is capped at salvage value and

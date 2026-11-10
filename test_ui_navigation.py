@@ -300,35 +300,22 @@ def test_preventive_schedule_reminder_emails_are_deduplicated(client, monkeypatc
 
 
 def test_resend_api_is_used_for_configured_reminders(monkeypatch):
-    import json
+    from unittest.mock import patch
 
     from components import mailer
 
     monkeypatch.setenv("RESEND_API_KEY", "test-token")
     monkeypatch.setenv("RESEND_FROM_EMAIL", "TGM Assets <assets@example.com>")
     monkeypatch.setattr(mailer, "_config", lambda: dict.fromkeys(mailer.KEYS, ""))
-    requests = []
-
-    class Response:
-        status = 200
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_):
-            return False
-
-    def fake_urlopen(req, timeout):
-        requests.append((req, timeout))
-        return Response()
-
-    monkeypatch.setattr(mailer, "urlopen", fake_urlopen)
-    assert mailer.configured() and mailer.using_resend()
-    assert mailer.send_email("admin@example.com", "Maintenance due", "Asset overdue.") is None
-    req, timeout = requests[0]
-    assert req.full_url == "https://api.resend.com/emails"
-    assert json.loads(req.data)["to"] == ["admin@example.com"]
-    assert timeout == 15
+    with patch.object(mailer.resend.Emails, "send") as send:
+        assert mailer.configured() and mailer.using_resend()
+        assert mailer.send_email("admin@example.com", "Maintenance due", "Asset overdue.") is None
+        send.assert_called_once_with({
+            "from": "TGM Assets <assets@example.com>",
+            "to": ["admin@example.com"],
+            "subject": "Maintenance due",
+            "text": "Asset overdue.",
+        })
 
 
 def test_failed_reminder_email_is_retried_without_duplicate_notification(client, monkeypatch):

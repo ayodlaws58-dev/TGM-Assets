@@ -4,8 +4,9 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+
+import resend
+from resend.exceptions import ResendError
 
 KEYS = ["host", "port", "user", "password", "sender"]
 CONFIG_FILE = Path(__file__).resolve().parent.parent / "smtp.json"
@@ -25,10 +26,18 @@ def _config():
 
 
 def configured():
+    resend_config = resend_current()
+    if resend_config["has_api_key"]:
+        return resend_config["configured"]
     c = _config()
-    resend = os.environ.get("RESEND_API_KEY", "").strip()
-    resend_from = os.environ.get("RESEND_FROM_EMAIL", "").strip()
-    return bool((resend and resend_from) or (c["host"] and (c["sender"] or c["user"])))
+    return bool(c["host"] and (c["sender"] or c["user"]))
+
+
+def resend_current():
+    api_key = os.environ.get("RESEND_API_KEY", "").strip()
+    sender = os.environ.get("RESEND_FROM_EMAIL", "").strip()
+    return {"has_api_key": bool(api_key), "sender": sender,
+            "configured": bool(api_key and sender)}
 
 
 def current():
@@ -73,30 +82,28 @@ def save_config(host, port, user, password, sender):
 
 def send_email(to, subject, body):
     """Send a plain-text email. Returns None on success or an error message."""
-    c = _config()
-    if not configured():
-        return "Email is not configured. Set RESEND_API_KEY and RESEND_FROM_EMAIL or configure SMTP."
     if not to:
         return "No email address."
-    resend_key = os.environ.get("RESEND_API_KEY", "").strip()
-    resend_from = os.environ.get("RESEND_FROM_EMAIL", "").strip()
-    if resend_key and resend_from:
-        payload = json.dumps({"from": resend_from, "to": [to],
-                              "subject": subject, "text": body}).encode("utf-8")
-        req = Request("https://api.resend.com/emails", data=payload,
-                      headers={"Authorization": f"Bearer {resend_key}",
-                               "Content-Type": "application/json"},
-                      method="POST")
+    resend_config = resend_current()
+    if resend_config["has_api_key"]:
+        if not resend_config["sender"]:
+            return "RESEND_FROM_EMAIL is required when RESEND_API_KEY is set."
+        resend.api_key = os.environ["RESEND_API_KEY"].strip()
+        params = {
+            "from": resend_config["sender"],
+            "to": [to],
+            "subject": subject,
+            "text": body,
+        }
         try:
-            with urlopen(req, timeout=15) as response:
-                if response.status not in (200, 201):
-                    return f"Resend returned unexpected HTTP status {response.status}."
-        except HTTPError as e:
-            detail = e.read(1000).decode("utf-8", errors="replace")
-            return f"Resend returned HTTP {e.code}: {detail}"
-        except (URLError, TimeoutError) as e:
-            return f"Could not send email via Resend: {e}"
+            resend.Emails.send(params)
+        except ResendError as e:
+            return f"Could not send email: {e}"
         return None
+
+    c = _config()
+    if not configured():
+        return "Email is not configured. Set RESEND_API_KEY and RESEND_FROM_EMAIL or add SMTP settings."
     msg = EmailMessage()
     msg["From"] = c["sender"] or c["user"]
     msg["To"] = to
