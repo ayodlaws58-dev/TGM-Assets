@@ -3,9 +3,11 @@
 {% block content %}
 {{ header('Settings', 'Email delivery and branding (Developer only)') }}
 
-<h2>Email (SMTP)</h2>
+<h2>Email (Resend or SMTP)</h2>
 {% if mail_ok %}<div class="alert green">Email is configured.</div>
 {% else %}<div class="alert warn">Email is not configured yet. Fill in the form below, save, then send a test.</div>{% endif %}
+{% if resend_ok %}<div class="alert green">Resend is active. Reminder and notification emails use the Resend API.</div>
+<p class="muted">Configure <code>RESEND_API_KEY</code> and <code>RESEND_FROM_EMAIL</code> in the application environment. SMTP is used as a fallback if Resend is not configured.</p>{% endif %}
 {% if env %}<div class="alert warn">These values are set by environment variables and override what you save here: {{ env|join(', ') }}.</div>{% endif %}
 <form method="post" action="{{ url_for('settings_smtp') }}" class="card form-grid">{{ csrf() }}
 <div><label>SMTP host</label><input name="host" value="{{ smtp.host }}" placeholder="smtp.gmail.com" required></div>

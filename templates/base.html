@@ -11,7 +11,7 @@
   <a class="brand" href="{{ url_for('dashboard') }}"><img src="{{ logo_url() }}" alt="TGM Assets logo"><span>TGM Assets</span></a>
   <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="primary-nav">Menu</button>
   <nav id="primary-nav" aria-label="Main navigation">
-    {% set active_endpoint = {'asset_edit': 'assets_page', 'report_csv': 'reports'}.get(request.endpoint, request.endpoint) %}
+    {% set active_endpoint = {'asset_edit': 'assets_page', 'asset_detail': 'assets_page', 'asset_label': 'assets_page', 'asset_qr': 'assets_page', 'asset_attachment': 'assets_page', 'asset_attachment_upload': 'assets_page', 'asset_attachment_delete': 'assets_page', 'report_csv': 'reports'}.get(request.endpoint, request.endpoint) %}
     {% macro nav_link(ep, label) %}
       <a href="{{ url_for(ep) }}" class="{{ 'active' if active_endpoint == ep else '' }}"{% if active_endpoint == ep %} aria-current="page"{% endif %}>{{ label }}</a>
     {% endmacro %}

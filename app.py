@@ -1,14 +1,22 @@
 import hmac
+import io
+import json
+import math
 import os
+import re
 import secrets
 import threading
 import time
+import uuid
 from datetime import date
 from functools import wraps
 
 import pandas as pd
+import qrcode
+from qrcode.image.svg import SvgPathImage
 from flask import (Flask, Response, abort, flash, g, redirect, render_template,
                    request, send_file, session, url_for)
+from werkzeug.utils import secure_filename
 
 from components import auth, mailer, notify, store
 
@@ -29,7 +37,7 @@ def _secret_key():
 
 app = Flask(__name__)
 app.config.update(SECRET_KEY=_secret_key(), SESSION_COOKIE_HTTPONLY=True,
-                  SESSION_COOKIE_SAMESITE="Lax", MAX_CONTENT_LENGTH=1024 * 1024)
+                  SESSION_COOKIE_SAMESITE="Lax", MAX_CONTENT_LENGTH=10 * 1024 * 1024)
 
 
 # ---------- request plumbing ----------
@@ -136,6 +144,9 @@ def valid_date(value):
 
 
 def schedule_rows(assets):
+    assets = assets.copy()
+    if "status" in assets:
+        assets["lifecycle_status"] = assets["status"].replace("", "Active")
     df = store.with_due_dates(assets)
     df["next_service"] = df["next_service"].dt.strftime("%Y-%m-%d").fillna("")
     rows = df.to_dict("records")
@@ -312,34 +323,93 @@ def dashboard():
 def assets_page():
     q = request.args.get("q", "").strip().lower()
     cat = request.args.get("category", "")
-    rows = schedule_rows(store.load_assets())
+    all_assets = store.load_assets()
+    rows = schedule_rows(all_assets)
     if q:
-        rows = [r for r in rows if q in f"{r['name']} {r['location']} {r['category']}".lower()]
+        rows = [r for r in rows
+                if q in f"{r['name']} {r['location']} {r['category']} {r['owner']} {r['asset_id']}".lower()]
     if cat in store.CATEGORIES:
         rows = [r for r in rows if r["category"] == cat]
     rows.sort(key=lambda r: (r["next_service"] == "", r["next_service"]))
-    return render_template("assets.html", rows=rows, q=q, cat=cat, categories=store.CATEGORIES)
+    return render_template("assets.html", rows=rows, parent_assets=all_assets.to_dict("records"),
+                           q=q, cat=cat, categories=store.CATEGORIES)
 
 
-def _asset_fields(form):
+def _asset_fields(form, assets, current_id=""):
     name = form.get("name", "").strip()
     category = form.get("category", "")
-    interval = int(num(form.get("interval_days"), 0))
+    try:
+        interval = int(form.get("interval_days", ""))
+    except (TypeError, ValueError):
+        interval = 0
     last = valid_date(form.get("last_service", ""))
-    if not name or category not in store.CATEGORIES or interval < 1 or not last:
+    parent_id = form.get("parent_id", "").strip()
+    purchase_date = form.get("purchase_date", "").strip()
+    status = form.get("status", "Active")
+    life = form.get("useful_life_years", "").strip()
+
+    def amount(field):
+        raw = form.get(field, "").strip()
+        if not raw:
+            return ""
+        try:
+            value = float(raw)
+        except ValueError:
+            return None
+        return f"{value:.2f}" if math.isfinite(value) and value >= 0 else None
+
+    cost = amount("cost")
+    salvage = amount("salvage_value")
+    disposal_value = amount("disposal_value")
+    retired_on = form.get("retired_on", "").strip()
+    disposed_on = form.get("disposed_on", "").strip()
+    if (not name or category not in store.CATEGORIES or interval < 1 or not last
+            or status not in store.ASSET_STATUSES
+            or (parent_id and (parent_id == current_id or not (assets["asset_id"] == parent_id).any()))
+            or (purchase_date and not valid_date(purchase_date))
+            or any(value is None for value in (cost, salvage, disposal_value))
+            or (life and (not life.isdigit() or len(life) > 3 or not 1 <= int(life) <= 100))
+            or (retired_on and not valid_date(retired_on))
+            or (disposed_on and not valid_date(disposed_on))
+            or (status == "Retired" and not valid_date(retired_on))
+            or (status == "Disposed" and not valid_date(disposed_on))):
         return None
+    if cost and salvage and float(salvage) > float(cost):
+        return None
+    if status != "Retired":
+        retired_on = ""
+    if status != "Disposed":
+        disposed_on = ""
+        disposal_value = ""
+    if purchase_date and ((retired_on and retired_on < purchase_date)
+                          or (disposed_on and disposed_on < purchase_date)):
+        return None
+
+    ancestor = parent_id
+    visited = set()
+    while ancestor:
+        if ancestor == current_id or ancestor in visited:
+            return None
+        visited.add(ancestor)
+        parent = assets[assets["asset_id"] == ancestor]
+        ancestor = parent.iloc[0]["parent_id"] if not parent.empty else ""
     return dict(name=name, category=category, location=form.get("location", "").strip(),
-                last_service=last, interval_days=interval, notes=form.get("notes", "").strip())
+                last_service=last, interval_days=interval, notes=form.get("notes", "").strip(),
+                parent_id=parent_id, owner=form.get("owner", "").strip(),
+                purchase_date=valid_date(purchase_date), cost=cost, status=status,
+                useful_life_years=life, salvage_value=salvage, retired_on=valid_date(retired_on),
+                disposed_on=valid_date(disposed_on), disposal_value=disposal_value,
+                disposal_note=form.get("disposal_note", "").strip())
 
 
 @app.post("/assets/new")
 @login_required("super_admin")
 def asset_new():
-    fields = _asset_fields(request.form)
+    assets = store.load_assets()
+    fields = _asset_fields(request.form, assets)
     if not fields:
-        flash("Name, category, a valid date and an interval of at least 1 day are required.", "error")
+        flash("Check the asset details, parent, dates, status and non-negative financial values.", "error")
     else:
-        assets = store.load_assets()
         assets = store.add_row(assets, asset_id=store.next_id(assets, "asset_id", "AST", 1), **fields)
         store.save_assets(assets)
         flash("Asset added.", "success")
@@ -354,25 +424,211 @@ def asset_edit(asset_id):
     if not i.any():
         abort(404)
     if request.method == "POST":
-        fields = _asset_fields(request.form)
+        fields = _asset_fields(request.form, assets, current_id=asset_id)
         if not fields:
-            flash("Name, category, a valid date and an interval of at least 1 day are required.", "error")
+            flash("Check the asset details, parent, dates, status and non-negative financial values.", "error")
         else:
             for k, v in fields.items():
                 assets.loc[i, k] = str(v)
             store.save_assets(assets)
             flash("Asset updated.", "success")
             return redirect(url_for("assets_page"))
-    return render_template("asset_edit.html", a=assets[i].iloc[0].to_dict(), categories=store.CATEGORIES)
+    return render_template("asset_edit.html", a=assets[i].iloc[0].to_dict(), categories=store.CATEGORIES,
+                           statuses=store.ASSET_STATUSES,
+                           parents=assets[assets["asset_id"] != asset_id].to_dict("records"))
 
 
 @app.post("/assets/<asset_id>/delete")
 @login_required("super_admin")
 def asset_delete(asset_id):
     assets = store.load_assets()
+    if not (assets["asset_id"] == asset_id).any():
+        abort(404)
+    if ((store.load_schedules()["asset_id"] == asset_id).any()
+            or (store.load_service_history()["asset_id"] == asset_id).any()
+            or (store.load_work_orders()["asset_id"] == asset_id).any()):
+        flash("Retire the asset instead of deleting it so its maintenance history is preserved.", "error")
+        return redirect(url_for("assets_page"))
+    if (assets["parent_id"] == asset_id).any():
+        flash("Move or delete child assets before deleting this asset.", "error")
+        return redirect(url_for("assets_page"))
+    attachment_ids = [item["id"] for item in _asset_attachment_rows(
+        assets.loc[assets["asset_id"] == asset_id].iloc[0].to_dict())]
     store.save_assets(assets[assets["asset_id"] != asset_id])
+    for attachment_id in attachment_ids:
+        if re.fullmatch(r"[a-f0-9]{32}\.(?:png|jpg|jpeg|webp|pdf)", attachment_id):
+            (store.DATA / "asset_uploads" / attachment_id).unlink(missing_ok=True)
     flash("Asset deleted.", "success")
     return redirect(url_for("assets_page"))
+
+
+def _asset_attachment_rows(asset):
+    return json.loads(asset.get("attachments") or "[]")
+
+
+def _asset_depreciation(asset, as_of=None):
+    cost = num(asset.get("cost", ""), None)
+    salvage = num(asset.get("salvage_value", ""), None)
+    try:
+        life = int(asset.get("useful_life_years") or 0)
+    except ValueError:
+        life = 0
+    purchase = valid_date(asset.get("purchase_date", ""))
+    if (cost is None or salvage is None or not math.isfinite(cost) or not math.isfinite(salvage)
+            or not life or not purchase or cost < salvage):
+        return None
+    as_of = as_of or date.today()
+    stop = as_of
+    for field in ("retired_on", "disposed_on"):
+        end = valid_date(asset.get(field, ""))
+        if end:
+            stop = min(stop, date.fromisoformat(end))
+    elapsed_years = max(0, (stop - date.fromisoformat(purchase)).days / 365.2425)
+    annual = (cost - salvage) / life
+    accumulated = min(cost - salvage, annual * elapsed_years)
+    return {"annual": annual, "accumulated": accumulated,
+            "book_value": max(salvage, cost - accumulated)}
+
+
+@app.route("/assets/<asset_id>")
+@login_required()
+def asset_detail(asset_id):
+    assets = store.load_assets()
+    matches = assets[assets["asset_id"] == asset_id]
+    if matches.empty:
+        abort(404)
+    asset = matches.iloc[0].to_dict()
+    attachments = _asset_attachment_rows(asset)
+    children = assets[assets["parent_id"] == asset_id].to_dict("records")
+    parent = assets[assets["asset_id"] == asset["parent_id"]]
+    services = store.load_service_history()
+    services = services[services["asset_id"] == asset_id].sort_values(
+        ["service_date", "created"], ascending=False)
+    schedules = store.load_schedules()
+    schedules = schedules[schedules["asset_id"] == asset_id]
+    return render_template("asset_detail.html", a=asset, attachments=attachments,
+                           children=children, parent=parent.iloc[0].to_dict() if not parent.empty else None,
+                           depreciation=_asset_depreciation(asset),
+                           services=services.to_dict("records"),
+                           schedules=schedules.to_dict("records"))
+
+
+@app.route("/assets/<asset_id>/label")
+@login_required()
+def asset_label(asset_id):
+    assets = store.load_assets()
+    matches = assets[assets["asset_id"] == asset_id]
+    if matches.empty:
+        abort(404)
+    return render_template("asset_label.html", a=matches.iloc[0].to_dict())
+
+
+@app.route("/assets/<asset_id>/qr.svg")
+@login_required()
+def asset_qr(asset_id):
+    if not (store.load_assets()["asset_id"] == asset_id).any():
+        abort(404)
+    image = qrcode.make(url_for("asset_detail", asset_id=asset_id, _external=True),
+                        image_factory=SvgPathImage, box_size=5, border=2)
+    output = io.BytesIO()
+    image.save(output)
+    output.seek(0)
+    return send_file(output, mimetype="image/svg+xml", download_name=f"{asset_id}.svg")
+
+
+UPLOAD_LIMIT = 8 * 1024 * 1024
+UPLOAD_TYPES = {
+    ".png": ("image/png", b"\x89PNG\r\n\x1a\n", "photo"),
+    ".jpg": ("image/jpeg", b"\xff\xd8\xff", "photo"),
+    ".jpeg": ("image/jpeg", b"\xff\xd8\xff", "photo"),
+    ".webp": ("image/webp", b"RIFF", "photo"),
+    ".pdf": ("application/pdf", b"%PDF-", "document"),
+}
+
+
+@app.post("/assets/<asset_id>/attachments")
+@login_required("super_admin")
+def asset_attachment_upload(asset_id):
+    assets = store.load_assets()
+    i = assets["asset_id"] == asset_id
+    if not i.any():
+        abort(404)
+    files = [f for f in request.files.getlist("files") if f and f.filename]
+    if not files or len(files) > 5:
+        flash("Select between one and five photos or PDF documents.", "error")
+        return redirect(url_for("asset_detail", asset_id=asset_id))
+    prepared = []
+    for file in files:
+        name = secure_filename(file.filename)
+        ext = os.path.splitext(name)[1].lower()
+        kind = UPLOAD_TYPES.get(ext)
+        data = file.read(UPLOAD_LIMIT + 1)
+        if (not name or not kind or not data or len(data) > UPLOAD_LIMIT
+                or not data.startswith(kind[1])
+                or (ext == ".webp" and data[8:12] != b"WEBP")):
+            flash("Uploads must be valid PNG, JPG, WebP or PDF files under 8 MB each.", "error")
+            return redirect(url_for("asset_detail", asset_id=asset_id))
+        prepared.append((name, kind, data))
+
+    attachment_dir = store.DATA / "asset_uploads"
+    attachment_dir.mkdir(parents=True, exist_ok=True)
+    attachments = _asset_attachment_rows(assets.loc[i].iloc[0].to_dict())
+    written = []
+    try:
+        for name, kind, data in prepared:
+            attachment_id = uuid.uuid4().hex + os.path.splitext(name)[1].lower()
+            path = attachment_dir / attachment_id
+            path.write_bytes(data)
+            written.append(path)
+            attachments.append({"id": attachment_id, "name": name, "mime": kind[0],
+                                "type": kind[2], "created": today()})
+        assets.loc[i, "attachments"] = json.dumps(attachments)
+        store.save_assets(assets)
+    except Exception:
+        for path in written:
+            path.unlink(missing_ok=True)
+        raise
+    flash(f"Uploaded {len(prepared)} attachment(s).", "success")
+    return redirect(url_for("asset_detail", asset_id=asset_id))
+
+
+@app.route("/assets/<asset_id>/attachments/<attachment_id>")
+@login_required()
+def asset_attachment(asset_id, attachment_id):
+    if not re.fullmatch(r"[a-f0-9]{32}\.(?:png|jpg|jpeg|webp|pdf)", attachment_id):
+        abort(404)
+    assets = store.load_assets()
+    matches = assets[assets["asset_id"] == asset_id]
+    if matches.empty:
+        abort(404)
+    attachment = next((item for item in _asset_attachment_rows(matches.iloc[0].to_dict())
+                       if item["id"] == attachment_id), None)
+    path = store.DATA / "asset_uploads" / attachment_id
+    if not attachment or not path.is_file():
+        abort(404)
+    return send_file(path, mimetype=attachment["mime"],
+                     as_attachment=attachment["type"] == "document",
+                     download_name=attachment["name"])
+
+
+@app.post("/assets/<asset_id>/attachments/<attachment_id>/delete")
+@login_required("super_admin")
+def asset_attachment_delete(asset_id, attachment_id):
+    if not re.fullmatch(r"[a-f0-9]{32}\.(?:png|jpg|jpeg|webp|pdf)", attachment_id):
+        abort(404)
+    assets = store.load_assets()
+    i = assets["asset_id"] == asset_id
+    if not i.any():
+        abort(404)
+    attachments = _asset_attachment_rows(assets.loc[i].iloc[0].to_dict())
+    kept = [item for item in attachments if item["id"] != attachment_id]
+    if len(kept) == len(attachments):
+        abort(404)
+    assets.loc[i, "attachments"] = json.dumps(kept)
+    store.save_assets(assets)
+    (store.DATA / "asset_uploads" / attachment_id).unlink(missing_ok=True)
+    flash("Attachment removed.", "success")
+    return redirect(url_for("asset_detail", asset_id=asset_id))
 
 
 # ---------- maintenance / work orders ----------
@@ -382,10 +638,110 @@ def maintenance():
     assets = store.load_assets()
     rows = schedule_rows(assets)
     alerts = sorted([r for r in rows if r["status"] in ("Overdue", "Due soon")], key=lambda r: r["days_left"])
-    return render_template("maintenance.html", alerts=alerts, assets=assets.to_dict("records"),
-                           today=today(), stats=dict(
-                               overdue=sum(r["status"] == "Overdue" for r in rows),
-                               soon=sum(r["status"] == "Due soon" for r in rows)))
+    all_schedules = store.load_schedules()
+    calendar_rows = store.schedule_rows(all_schedules, assets)
+    services = store.load_service_history().sort_values(
+        ["service_date", "created"], ascending=False).head(100)
+    active_assets = assets[~assets["status"].isin(["Retired", "Disposed"])]
+    return render_template("maintenance.html", alerts=alerts, schedules=calendar_rows,
+                           all_schedules=all_schedules.to_dict("records"),
+                           services=services.to_dict("records"),
+                           assets=active_assets.to_dict("records"), today=today(),
+                           assignees=auth.load_users()["username"].tolist(),
+                           schedule_units=store.SCHEDULE_UNITS,
+                           stats=dict(overdue=sum(r["status"] == "Overdue" for r in rows)
+                                      + sum(r["status"] == "Overdue" for r in calendar_rows),
+                                      soon=sum(r["status"] == "Due soon" for r in rows)
+                                      + sum(r["status"] == "Due soon" for r in calendar_rows)))
+
+
+def _nonnegative_value(raw):
+    raw = str(raw or "").strip()
+    if not raw:
+        return ""
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    return f"{value:.2f}" if math.isfinite(value) and value >= 0 else None
+
+
+def _record_service(asset_id, service_date, summary, completion_notes="", work_order_id="",
+                    schedule_id="", cost="", downtime_hours="", recorded_by=""):
+    assets = store.load_assets()
+    asset_mask = assets["asset_id"] == asset_id
+    if not asset_mask.any() or assets.loc[asset_mask, "status"].iloc[0] in ("Retired", "Disposed"):
+        abort(400, "A service record requires an active asset.")
+    if not valid_date(service_date) or not summary.strip():
+        abort(400, "A service date and summary are required.")
+    history = store.load_service_history()
+    if work_order_id and (history["work_order_id"] == work_order_id).any():
+        abort(400, "This work order already has a service record.")
+    schedules = store.load_schedules()
+    if schedule_id:
+        schedule_mask = schedules["schedule_id"] == schedule_id
+        if not schedule_mask.any() or schedules.loc[schedule_mask, "asset_id"].iloc[0] != asset_id:
+            abort(400, "The selected schedule does not belong to this asset.")
+        schedules.loc[schedule_mask, "last_completed"] = service_date
+        store.save_schedules(schedules)
+    history = store.add_row(
+        history, service_id=store.next_id(history, "service_id", "SRV", 1001),
+        asset_id=asset_id, work_order_id=work_order_id, schedule_id=schedule_id,
+        service_date=service_date, summary=summary.strip(),
+        completion_notes=completion_notes.strip(), cost=cost,
+        downtime_hours=downtime_hours, recorded_by=recorded_by, created=today())
+    store.save_service_history(history)
+    assets.loc[asset_mask, "last_service"] = service_date
+    store.save_assets(assets)
+
+
+@app.post("/maintenance/schedules/new")
+@login_required("admin")
+def schedule_new():
+    assets = store.load_assets()
+    asset_id = request.form.get("asset_id", "")
+    title = request.form.get("title", "").strip()
+    raw_interval = request.form.get("interval_value", "")
+    unit = request.form.get("interval_unit", "")
+    raw_last_completed = request.form.get("last_completed", "").strip()
+    last_completed = valid_date(raw_last_completed)
+    assignee = request.form.get("assigned_to", "").strip()
+    selected = assets[assets["asset_id"] == asset_id]
+    try:
+        interval = int(raw_interval)
+    except (TypeError, ValueError):
+        interval = 0
+    if (selected.empty or selected.iloc[0]["status"] in ("Retired", "Disposed")
+            or not title or len(title) > 160 or not 1 <= interval <= 1000
+            or unit not in store.SCHEDULE_UNITS
+            or (raw_last_completed and not last_completed)
+            or (assignee and not (auth.load_users()["username"] == assignee).any())):
+        flash("Choose an active asset, enter a schedule name and a valid calendar interval.", "error")
+        return redirect(url_for("maintenance"))
+    schedules = store.load_schedules()
+    schedules = store.add_row(
+        schedules, schedule_id=store.next_id(schedules, "schedule_id", "SCH", 3001),
+        asset_id=asset_id, title=title, interval_value=interval, interval_unit=unit,
+        last_completed=last_completed or selected.iloc[0]["last_service"],
+        assigned_to=assignee,
+        description=request.form.get("description", "").strip(), active="1",
+        created_by=g.user["username"])
+    store.save_schedules(schedules)
+    flash("Preventive schedule created.", "success")
+    return redirect(url_for("maintenance"))
+
+
+@app.post("/maintenance/schedules/<schedule_id>/toggle")
+@login_required("admin")
+def schedule_toggle(schedule_id):
+    schedules = store.load_schedules()
+    i = schedules["schedule_id"] == schedule_id
+    if not i.any():
+        abort(404)
+    schedules.loc[i, "active"] = "0" if schedules.loc[i, "active"].iloc[0] == "1" else "1"
+    store.save_schedules(schedules)
+    flash("Schedule updated.", "success")
+    return redirect(url_for("maintenance"))
 
 
 @app.post("/maintenance/record")
@@ -393,13 +749,25 @@ def maintenance():
 def record_service():
     assets = store.load_assets()
     when = valid_date(request.form.get("done_on", ""))
-    i = assets["asset_id"] == request.form.get("asset_id")
-    if not when or not i.any():
-        flash("Choose an asset and a valid date.", "error")
-    else:
-        assets.loc[i, "last_service"] = when
-        store.save_assets(assets)
-        flash("Service date recorded.", "success")
+    asset_id = request.form.get("asset_id", "")
+    cost = _nonnegative_value(request.form.get("cost", ""))
+    downtime = _nonnegative_value(request.form.get("downtime_hours", ""))
+    if cost is None or downtime is None or not when or not (assets["asset_id"] == asset_id).any():
+        flash("Choose an asset and enter a valid date, cost and downtime.", "error")
+        return redirect(url_for("maintenance"))
+    schedule_id = request.form.get("schedule_id", "")
+    if schedule_id:
+        schedules = store.load_schedules()
+        selected_schedule = schedules[schedules["schedule_id"] == schedule_id]
+        if (selected_schedule.empty or selected_schedule.iloc[0]["asset_id"] != asset_id
+                or selected_schedule.iloc[0]["active"] != "1"):
+            flash("Choose an active preventive schedule for the selected asset.", "error")
+            return redirect(url_for("maintenance"))
+    _record_service(asset_id, when, request.form.get("summary", ""),
+                    request.form.get("completion_notes", ""),
+                    schedule_id=schedule_id,
+                    cost=cost, downtime_hours=downtime, recorded_by=g.user["username"])
+    flash("Service record saved.", "success")
     return redirect(url_for("maintenance"))
 
 
@@ -409,8 +777,13 @@ def workorders():
     orders = store.load_work_orders()
     assets = store.load_assets()
     board = {s: orders[orders["status"] == s].to_dict("records") for s in store.STATUSES}
+    assets = assets[~assets["status"].isin(["Retired", "Disposed"])]
+    schedules = store.load_schedules()
+    users = auth.load_users()["username"].tolist()
     return render_template("workorders.html", board=board, statuses=store.STATUSES, today=today(),
-                           assets=assets.to_dict("records"), priorities=store.PRIORITIES)
+                           assets=assets.to_dict("records"), priorities=store.PRIORITIES,
+                           schedules=schedules[schedules["active"] == "1"].to_dict("records"),
+                           assignees=users)
 
 
 @app.post("/workorders/new")
@@ -420,15 +793,30 @@ def workorder_new():
     orders = store.load_work_orders()
     aid = request.form.get("asset_id", "")
     title = request.form.get("title", "").strip()
-    if not title or not (assets["asset_id"] == aid).any():
+    selected = assets[assets["asset_id"] == aid]
+    if not title or selected.empty:
         flash("A title and a valid asset are required.", "error")
         return redirect(url_for("workorders"))
+    if selected.iloc[0]["status"] in ("Retired", "Disposed"):
+        flash("Work orders cannot be created for retired or disposed assets.", "error")
+        return redirect(url_for("workorders"))
+    assigned_to = request.form.get("assigned_to", "").strip()
+    if assigned_to and not (auth.load_users()["username"] == assigned_to).any():
+        flash("Choose a valid staff member for assignment.", "error")
+        return redirect(url_for("workorders"))
+    schedule_id = request.form.get("schedule_id", "").strip()
+    if schedule_id:
+        schedule = store.load_schedules()
+        match = schedule[schedule["schedule_id"] == schedule_id]
+        if match.empty or match.iloc[0]["asset_id"] != aid or match.iloc[0]["active"] != "1":
+            flash("Choose a preventive schedule for the selected asset.", "error")
+            return redirect(url_for("workorders"))
     prio = request.form.get("priority", "Medium")
     orders = store.add_row(
         orders, wo_id=store.next_id(orders, "wo_id", "WO", 1001), asset_id=aid, title=title,
         description=request.form.get("description", "").strip(),
         priority=prio if prio in store.PRIORITIES else "Medium", status="New",
-        assigned_to=request.form.get("assigned_to", "").strip(), created=today(),
+        assigned_to=assigned_to, schedule_id=schedule_id, created=today(),
         due=valid_date(request.form.get("due", "")), requested_by=g.user["username"],
         cost=num(request.form.get("cost")), payment_status="Unpaid", approval_status="Pending")
     store.save_work_orders(orders)
@@ -446,8 +834,27 @@ def workorder_status(wo_id):
     status = request.form.get("status")
     if not i.any() or status not in store.STATUSES:
         abort(400, "That work order can't be updated (it may not be approved yet).")
+    if orders.loc[i, "status"].iloc[0] == "Completed":
+        abort(400, "Completed work orders cannot be changed.")
+    actual_cost = _nonnegative_value(request.form.get("actual_cost", ""))
+    downtime = _nonnegative_value(request.form.get("downtime_hours", ""))
+    completion_notes = request.form.get("completion_notes", "").strip()
+    if actual_cost is None or downtime is None:
+        abort(400, "Actual cost and downtime must be non-negative numbers.")
+    if status == "Completed" and not completion_notes:
+        abort(400, "Completion notes are required to complete a work order.")
     orders.loc[i, "status"] = status
     orders.loc[i, "completed"] = today() if status == "Completed" else ""
+    if status == "Completed":
+        row = orders.loc[i].iloc[0]
+        orders.loc[i, "completion_notes"] = completion_notes
+        orders.loc[i, "actual_cost"] = actual_cost or row["cost"]
+        orders.loc[i, "cost"] = actual_cost or row["cost"]
+        orders.loc[i, "downtime_hours"] = downtime
+        _record_service(row["asset_id"], today(), row["title"], completion_notes,
+                        work_order_id=wo_id, schedule_id=row["schedule_id"],
+                        cost=orders.loc[i, "actual_cost"].iloc[0], downtime_hours=downtime,
+                        recorded_by=g.user["username"])
     store.save_work_orders(orders)
     return redirect(url_for("workorders"))
 
@@ -782,7 +1189,8 @@ def logo():
 @login_required("developer")
 def settings():
     return render_template("settings.html", smtp=mailer.current(), env=mailer.env_overrides(),
-                           mail_ok=mailer.configured(), custom_logo=_custom_logo()[0] is not None)
+                           mail_ok=mailer.configured(), resend_ok=mailer.using_resend(),
+                           custom_logo=_custom_logo()[0] is not None)
 
 
 @app.post("/settings/smtp")

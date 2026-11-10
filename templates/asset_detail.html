@@ -1,0 +1,81 @@
+{% extends "base.html" %}{% from "_macros.html" import header, csrf, badge %}
+{% block title %}{{ a.name }} · Asset{% endblock %}
+{% block content %}
+{{ header(a.name, a.asset_id ~ ' · ' ~ a.category) }}
+<div class="quick-actions">
+  <a class="btn" href="{{ url_for('asset_label', asset_id=a.asset_id) }}">Print QR label</a>
+  {% if has_role('super_admin') %}<a class="btn btn-gray" href="{{ url_for('asset_edit', asset_id=a.asset_id) }}">Edit asset</a>{% endif %}
+  <a class="btn btn-gray" href="{{ url_for('assets_page') }}">Back to assets</a>
+</div>
+<div class="grid g2 asset-detail-grid">
+  <section class="card">
+    <h2>Asset details</h2>
+    <dl class="asset-detail-list">
+      <dt>Lifecycle status</dt><dd>{{ badge(a.status or 'Active') }}</dd>
+      <dt>Location</dt><dd>{{ a.location or '—' }}</dd>
+      <dt>Owner / responsible team</dt><dd>{{ a.owner or '—' }}</dd>
+      <dt>Parent asset</dt><dd>{% if parent %}<a href="{{ url_for('asset_detail', asset_id=parent.asset_id) }}">{{ parent.name }} ({{ parent.asset_id }})</a>{% else %}None{% endif %}</dd>
+      <dt>Purchase date</dt><dd>{{ a.purchase_date or '—' }}</dd>
+      <dt>Purchase cost</dt><dd>{{ a.cost|float|money if a.cost else '—' }}</dd>
+      <dt>Useful life</dt><dd>{{ a.useful_life_years ~ ' years' if a.useful_life_years else '—' }}</dd>
+      <dt>Salvage value</dt><dd>{{ a.salvage_value|float|money if a.salvage_value else '—' }}</dd>
+      <dt>Last serviced / painted</dt><dd>{{ a.last_service or '—' }} · every {{ a.interval_days or '—' }} days</dd>
+      <dt>Retired on</dt><dd>{{ a.retired_on or '—' }}</dd>
+      <dt>Disposed on</dt><dd>{{ a.disposed_on or '—' }}</dd>
+      <dt>Disposal proceeds</dt><dd>{{ a.disposal_value|float|money if a.disposal_value else '—' }}</dd>
+      <dt>Disposal notes</dt><dd>{{ a.disposal_note or '—' }}</dd>
+      <dt>Notes</dt><dd>{{ a.notes or '—' }}</dd>
+    </dl>
+  </section>
+  <section class="card">
+    <h2>Depreciation</h2>
+    {% if depreciation %}
+    <dl class="asset-detail-list">
+      <dt>Method</dt><dd>Straight-line</dd>
+      <dt>Annual depreciation</dt><dd>{{ depreciation.annual|money }}</dd>
+      <dt>Accumulated depreciation</dt><dd>{{ depreciation.accumulated|money }}</dd>
+      <dt>Current book value</dt><dd><strong>{{ depreciation.book_value|money }}</strong></dd>
+    </dl>
+    <p class="muted">Calculated from the purchase date through today (or the recorded retirement/disposal date), capped at salvage value.</p>
+    {% else %}<p class="muted">Add purchase date, cost, and useful life to calculate straight-line depreciation.</p>{% endif %}
+    <h2>Child assets</h2>
+    {% if children %}<ul>{% for child in children %}<li><a href="{{ url_for('asset_detail', asset_id=child.asset_id) }}">{{ child.name }} ({{ child.asset_id }})</a> · {{ child.category }}</li>{% endfor %}</ul>
+    {% else %}<p class="muted">No child assets.</p>{% endif %}
+    <h2>Preventive schedules</h2>
+    {% if schedules %}<ul>{% for schedule in schedules %}<li>{{ schedule.title }} · every {{ schedule.interval_value }} {{ schedule.interval_unit }} · {{ 'Active' if schedule.active == '1' else 'Paused' }}</li>{% endfor %}</ul>
+    {% else %}<p class="muted">No recurring calendar schedules.</p>{% endif %}
+  </section>
+</div>
+
+<section class="card">
+  <h2>Photos and documents</h2>
+  {% if attachments %}
+  <div class="attachment-grid">
+    {% for item in attachments %}
+    <div class="attachment-card">
+      {% if item.type == 'photo' %}<a href="{{ url_for('asset_attachment', asset_id=a.asset_id, attachment_id=item.id) }}"><img class="asset-photo" src="{{ url_for('asset_attachment', asset_id=a.asset_id, attachment_id=item.id) }}" alt="{{ item.name }}"></a>{% endif %}
+      <a href="{{ url_for('asset_attachment', asset_id=a.asset_id, attachment_id=item.id) }}">{{ item.name }}</a>
+      <span class="muted">{{ item.type|title }} · {{ item.created }}</span>
+      {% if has_role('super_admin') %}<form method="post" action="{{ url_for('asset_attachment_delete', asset_id=a.asset_id, attachment_id=item.id) }}" data-confirm="Remove {{ item.name }}?">{{ csrf() }}<button class="btn-red">Remove</button></form>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}<p class="muted">No photos or documents have been attached.</p>{% endif %}
+  {% if has_role('super_admin') %}
+  <form method="post" enctype="multipart/form-data" action="{{ url_for('asset_attachment_upload', asset_id=a.asset_id) }}" class="form-grid">
+    {{ csrf() }}
+    <div><label for="asset-files">Upload photos or PDF documents (up to 5 files, 8 MB each)</label><input id="asset-files" type="file" name="files" accept=".png,.jpg,.jpeg,.webp,.pdf" multiple required></div>
+    <div><button>Upload attachments</button></div>
+  </form>
+  {% endif %}
+</section>
+<section class="card">
+  <h2>Service history</h2>
+  <div class="table-wrap"><table><tr><th>Date</th><th>Service</th><th>Work order</th><th>Cost</th><th>Downtime</th><th>Recorded by</th><th>Completion notes</th></tr>
+  {% for record in services %}<tr><td>{{ record.service_date }}</td><td>{{ record.summary }}</td><td>{{ record.work_order_id or '—' }}</td>
+  <td>{{ record.cost|float|money if record.cost else '—' }}</td><td>{{ record.downtime_hours or '—' }}{% if record.downtime_hours %} h{% endif %}</td>
+  <td>{{ record.recorded_by }}</td><td>{{ record.completion_notes or '—' }}</td></tr>
+  {% else %}<tr><td colspan="7" class="empty-cell">No service history recorded for this asset.</td></tr>{% endfor %}
+  </table></div>
+</section>
+{% endblock %}

@@ -15,6 +15,9 @@ def read_csv_files():
     for table, (key, columns) in database.TABLES.items():
         path = ROOT / "data" / f"{table}.csv"
         if not path.is_file():
+            if table in ("maintenance_schedules", "service_history"):
+                tables[table] = pd.DataFrame(columns=columns)
+                continue
             raise FileNotFoundError(f"Required CSV file not found: {path}")
         frame = pd.read_csv(path, dtype=str, keep_default_na=False)
         if key not in frame.columns:

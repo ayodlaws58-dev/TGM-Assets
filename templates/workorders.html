@@ -1,13 +1,14 @@
 {% extends "base.html" %}{% from "_macros.html" import header, csrf, badge %}
 {% block title %}Work orders{% endblock %}
 {% block content %}
-{{ header('Work Orders', 'Request work. It needs approval before it can start') }}
+{{ header('Work Orders', 'Report an issue or request work. Approval is required before work starts') }}
 <details class="card"><summary>Request a work order <span class="muted">· approval required before work starts</span></summary>
 {% if assets %}<form method="post" action="{{ url_for('workorder_new') }}" class="form-grid" style="margin-top:12px">{{ csrf() }}
 <div><label for="wo-asset">Asset</label><select id="wo-asset" name="asset_id" required>{% for a in assets %}<option value="{{ a.asset_id }}">{{ a.asset_id }} - {{ a.name }}</option>{% endfor %}</select></div>
 <div><label for="wo-title">Title</label><input id="wo-title" name="title" placeholder="Oil change, repaint building" maxlength="160" required></div>
 <div><label>Priority</label><select name="priority">{% for p in priorities %}<option {{ 'selected' if p == 'Medium' }}>{{ p }}</option>{% endfor %}</select></div>
-<div><label for="wo-assigned">Assigned to</label><input id="wo-assigned" name="assigned_to" placeholder="Optional"></div>
+<div><label for="wo-assigned">Suggested assignee</label><select id="wo-assigned" name="assigned_to"><option value="">Unassigned</option>{% for u in assignees %}<option value="{{ u }}">{{ u }}</option>{% endfor %}</select></div>
+<div><label for="wo-schedule">Preventive schedule</label><select id="wo-schedule" name="schedule_id"><option value="">Issue / corrective work</option>{% for s in schedules %}<option value="{{ s.schedule_id }}" data-asset-id="{{ s.asset_id }}">{{ s.title }} · {{ s.asset_id }}</option>{% endfor %}</select></div>
 <div><label>Due date</label><input type="date" name="due" value="{{ today }}"></div>
 <div><label>Estimated cost</label><input type="number" name="cost" min="0" step="0.01" value="0"></div>
 <div style="grid-column:1/-1"><label for="wo-description">Description <span class="muted">· include the issue and work needed</span></label><textarea id="wo-description" name="description" rows="3"></textarea></div>
@@ -26,11 +27,24 @@
     {% if o.assigned_to %} · assigned to {{ o.assigned_to }}{% endif %}</div>
     {% if o.decision_note %}<p class="muted">Decision note: {{ o.decision_note }}</p>{% endif %}
     {% if o.description %}<p>{{ o.description }}</p>{% endif %}
+    {% if s == 'Completed' %}
+      {% if o.completion_notes %}<p><b>Completion notes:</b> {{ o.completion_notes }}</p>{% endif %}
+      <p class="muted">Actual cost: {{ (o.actual_cost or o.cost)|float|money }} · Downtime: {{ o.downtime_hours or '0' }} hours</p>
+    {% endif %}
     {% if has_role('admin') and ok and s != 'Completed' %}
     <form method="post" action="{{ url_for('workorder_status', wo_id=o.wo_id) }}" class="wo-action">{{ csrf() }}
       <label for="status-{{ o.wo_id }}">Next status</label><div class="inline">
       <select id="status-{{ o.wo_id }}" name="status">{% for t in statuses %}<option {{ 'selected' if t == s }}>{{ t }}</option>{% endfor %}</select>
       <button>Save status</button></div></form>
+      <form method="post" action="{{ url_for('workorder_status', wo_id=o.wo_id) }}" class="wo-action">{{ csrf() }}
+        <input type="hidden" name="status" value="Completed">
+        <label for="completion-{{ o.wo_id }}">Complete work order</label>
+        <textarea id="completion-{{ o.wo_id }}" name="completion_notes" rows="2" placeholder="Completion notes"></textarea>
+        <div class="form-grid">
+          <div><label>Actual cost</label><input type="number" name="actual_cost" min="0" step="0.01" value="{{ o.cost }}"></div>
+          <div><label>Downtime (hours)</label><input type="number" name="downtime_hours" min="0" step="0.01" value="0"></div>
+        </div><button>Complete and record service</button>
+      </form>
     {% elif o.approval_status == 'Pending' %}
       <p class="next-step">{% if has_role('admin') %}<a href="{{ url_for('approvals') }}">Next step: review this request →</a>{% else %}Next step: awaiting an approver{% endif %}</p>
     {% elif o.approval_status == 'Rejected' %}

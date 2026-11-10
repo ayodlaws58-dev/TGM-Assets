@@ -1,29 +1,27 @@
 {% extends "base.html" %}{% from "_macros.html" import header, csrf, badge %}
 {% block title %}Assets{% endblock %}
 {% block content %}
-{{ header('Asset Registry', 'Generators, ACs, buildings, painting, furniture repairs and other tracked assets') }}
+{{ header('Asset Registry', 'Track asset ownership, lifecycle, service and financial details') }}
 <form method="get" class="form-grid card filter-form">
-  <div><label for="asset-search">Search assets</label><input id="asset-search" name="q" value="{{ q }}" placeholder="Name, location or category"></div>
+  <div><label for="asset-search">Search assets</label><input id="asset-search" name="q" value="{{ q }}" placeholder="Name, ID, owner or location"></div>
   <div><label>Category</label><select name="category"><option value="">All</option>
     {% for c in categories %}<option {{ 'selected' if c == cat }}>{{ c }}</option>{% endfor %}</select></div>
   <div class="inline"><button>Apply filters</button>{% if q or cat %}<a class="btn btn-gray" href="{{ url_for('assets_page') }}">Clear</a>{% endif %}</div>
 </form>
 <p class="muted result-count" aria-live="polite">{{ rows|length }} asset(s){% if q or cat %} match your filters{% endif %}</p>
 <div class="table-wrap"><table>
-<tr><th>ID</th><th>Asset</th><th>Location</th><th>Next due</th><th>Days left</th><th>Status</th><th>Details</th>{% if has_role('super_admin') %}<th>Actions</th>{% endif %}</tr>
+<tr><th>ID</th><th>Asset</th><th>Location / owner</th><th>Cost</th><th>Lifecycle</th><th>Next due</th><th>Days left</th><th>Details</th>{% if has_role('super_admin') %}<th>Actions</th>{% endif %}</tr>
 {% for r in rows %}<tr>
-<td>{{ r.asset_id }}</td><td><strong>{{ r.name }}</strong><br><span class="muted">{{ r.category }} · {{ r.kind }}</span></td>
-<td>{{ r.location or '—' }}</td><td>{{ r.next_service or 'Not scheduled' }}</td>
-<td>{{ r.days_left if r.days_left is not none else '—' }}</td><td>{{ badge(r.status) }}</td>
-<td><details class="asset-more"><summary>More</summary><dl>
-  <dt>Last serviced / painted</dt><dd>{{ r.last_service or '—' }}</dd>
-  <dt>Interval</dt><dd>{{ r.interval_days }} days</dd>
-  <dt>Notes</dt><dd>{{ r.notes or 'No notes' }}</dd>
-</dl></details></td>
+<td><a href="{{ url_for('asset_detail', asset_id=r.asset_id) }}">{{ r.asset_id }}</a></td>
+<td><strong>{% if r.parent_id %}<span class="muted">Child: </span>{% endif %}<a href="{{ url_for('asset_detail', asset_id=r.asset_id) }}">{{ r.name }}</a></strong><br><span class="muted">{{ r.category }} · {{ r.kind }}{% if r.parent_id %} · Child of {{ r.parent_id }}{% endif %}</span></td>
+<td>{{ r.location or '—' }}<br><span class="muted">{{ r.owner or 'No owner assigned' }}</span></td>
+<td>{{ r.cost|float|money if r.cost else '—' }}</td><td>{{ badge(r.lifecycle_status or 'Active') }}</td>
+<td>{{ r.next_service or 'Not scheduled' }}</td><td>{{ r.days_left if r.days_left is not none else '—' }}</td>
+<td><a class="btn btn-gray" href="{{ url_for('asset_detail', asset_id=r.asset_id) }}">View</a></td>
 {% if has_role('super_admin') %}<td><div class="action-stack"><a class="btn btn-gray" href="{{ url_for('asset_edit', asset_id=r.asset_id) }}">Edit</a>
 <form method="post" action="{{ url_for('asset_delete', asset_id=r.asset_id) }}" data-confirm="Delete {{ r.name }}?">{{ csrf() }}
 <button class="btn-red">Delete</button></form></div></td>{% endif %}</tr>
-{% else %}<tr><td colspan="{{ 8 if has_role('super_admin') else 7 }}" class="empty-cell">
+{% else %}<tr><td colspan="{{ 9 if has_role('super_admin') else 8 }}" class="empty-cell">
   {% if q or cat %}<strong>No matching assets</strong><br>Try a different search or category, or clear the filters.
   {% else %}<strong>No assets yet</strong><br>{% if has_role('super_admin') %}Add your first asset below to begin tracking maintenance.{% else %}Ask a Super Admin to add assets so maintenance can be tracked.{% endif %}{% endif %}
 </td></tr>{% endfor %}
@@ -35,9 +33,20 @@
 <div><label>Name</label><input name="name" placeholder="JMG Generator, Office AC, Boardroom chairs" required></div>
 <div><label>Category</label><select name="category">{% for c in categories %}<option>{{ c }}</option>{% endfor %}</select></div>
 <div><label>Location</label><input name="location"></div>
+<div><label>Owner / responsible team</label><input name="owner"></div>
+<div><label>Parent asset</label><select name="parent_id"><option value="">None (top-level asset)</option>{% for r in parent_assets %}<option value="{{ r.asset_id }}">{{ r.asset_id }} · {{ r.name }}</option>{% endfor %}</select></div>
+<div><label>Purchase date</label><input name="purchase_date" type="date"></div>
+<div><label>Purchase cost</label><input name="cost" type="number" min="0" step="0.01"></div>
+<div><label>Lifecycle status</label><select name="status">{% for s in ['Active', 'Under Maintenance', 'Retired', 'Disposed'] %}<option>{{ s }}</option>{% endfor %}</select></div>
+<div><label>Useful life (years)</label><input name="useful_life_years" type="number" min="1" max="100"></div>
+<div><label>Salvage value</label><input name="salvage_value" type="number" min="0" step="0.01" value="0"></div>
 <div><label>Service / repaint interval (days)</label><input name="interval_days" type="number" min="1" value="180" required></div>
 <div><label>Last serviced / painted</label><input name="last_service" type="date" required></div>
 <div><label>Notes</label><input name="notes"></div>
+<div><label>Retirement date (when retired)</label><input name="retired_on" type="date"></div>
+<div><label>Disposal date (when disposed)</label><input name="disposed_on" type="date"></div>
+<div><label>Disposal proceeds</label><input name="disposal_value" type="number" min="0" step="0.01"></div>
+<div><label>Disposal notes</label><input name="disposal_note"></div>
 <div><button>Add asset</button></div></form></details>
 {% endif %}
 {% endblock %}

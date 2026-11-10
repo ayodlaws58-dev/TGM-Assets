@@ -1,4 +1,5 @@
 import os
+import threading
 from contextlib import contextmanager
 
 import pandas as pd
@@ -15,9 +16,13 @@ TABLES = {
     "assets": ("asset_id", tuple(store.ASSET_COLS)),
     "work_orders": ("wo_id", tuple(store.WO_COLS)),
     "procurement": ("req_id", tuple(store.PR_COLS)),
+    "maintenance_schedules": ("schedule_id", tuple(store.SCHEDULE_COLS)),
+    "service_history": ("service_id", tuple(store.SERVICE_COLS)),
     "notifications": ("notif_id", ("notif_id", "username", "kind", "title", "message",
-                                   "created", "read", "key")),
+                                   "created", "read", "key", "email_sent")),
 }
+SCHEMA_READY = set()
+SCHEMA_LOCK = threading.Lock()
 
 
 def use_csv_backend():
@@ -49,6 +54,7 @@ def transaction():
             yield cursor
         connection.commit()
     except Exception:
+        SCHEMA_READY.clear()
         connection.rollback()
         raise
     finally:
@@ -70,9 +76,28 @@ def initialize(cursor):
                        "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4")
 
 
+def _ensure_table_schema(cursor, table):
+    with SCHEMA_LOCK:
+        if table in SCHEMA_READY:
+            return
+        key, columns = TABLES[table]
+        definitions = [f"`{key}` VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL PRIMARY KEY"]
+        definitions.extend(f"`{column}` LONGTEXT NOT NULL" for column in columns if column != key)
+        cursor.execute(f"CREATE TABLE IF NOT EXISTS `{table}` "
+                       f"(`seq` BIGINT NOT NULL AUTO_INCREMENT UNIQUE, {', '.join(definitions)}) "
+                       "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4")
+        cursor.execute(f"SHOW COLUMNS FROM `{table}`")
+        existing = {row["Field"] for row in cursor.fetchall()}
+        for column in columns:
+            if column not in existing:
+                cursor.execute(f"ALTER TABLE `{table}` ADD COLUMN `{column}` LONGTEXT NULL")
+        SCHEMA_READY.add(table)
+
+
 def dataframe(table, columns):
     cols = _columns(table, columns)
     with transaction() as cursor:
+        _ensure_table_schema(cursor, table)
         cursor.execute(f"SELECT {cols} FROM `{table}` ORDER BY `seq`")
         rows = cursor.fetchall()
     return pd.DataFrame(rows, columns=columns).fillna("").astype(str)
@@ -89,5 +114,6 @@ def insert_rows(cursor, table, df, columns):
 def save_table(table, df, columns):
     _columns(table, columns)
     with transaction() as cursor:
+        _ensure_table_schema(cursor, table)
         cursor.execute(f"DELETE FROM `{table}`")
         insert_rows(cursor, table, df, columns)
