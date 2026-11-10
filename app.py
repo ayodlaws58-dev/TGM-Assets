@@ -782,7 +782,8 @@ def logo():
 @login_required("developer")
 def settings():
     return render_template("settings.html", smtp=mailer.current(), env=mailer.env_overrides(),
-                           mail_ok=mailer.configured(), custom_logo=_custom_logo()[0] is not None)
+                           mail_ok=mailer.configured(), resend=mailer.resend_current(),
+                           custom_logo=_custom_logo()[0] is not None)
 
 
 @app.post("/settings/smtp")

@@ -45,5 +45,8 @@ Switching back does not copy MySQL changes into CSV.
 The app replaces whole tables on writes, so run **one application process only**,
 with no external writers or concurrent import. In particular use one Gunicorn
 worker. Multiple processes can otherwise overwrite each other's changes. The
-logo, SMTP configuration and generated secret key remain local files; configure
-`SECRET_KEY` and `SMTP_*` environment variables for hosted deployments.
+logo, SMTP configuration and generated secret key remain local files. For hosted
+deployments, configure `SECRET_KEY` and either `RESEND_API_KEY` plus
+`RESEND_FROM_EMAIL`, or the `SMTP_*` environment variables. Resend takes
+precedence over SMTP when `RESEND_API_KEY` is set; verify the sender domain with
+Resend before sending.
