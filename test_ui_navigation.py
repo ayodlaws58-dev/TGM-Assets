@@ -44,6 +44,41 @@ def group_tag(html, name):
     return match.group(1)
 
 
+@pytest.mark.parametrize("holiday,name,label", [
+    (date(2026, 4, 5), "easter", "Easter"),
+    (date(2026, 10, 1), "independence", "Nigerian Independence Day"),
+    (date(2026, 10, 31), "halloween", "Halloween"),
+    (date(2026, 11, 26), "thanksgiving", "Thanksgiving"),
+    (date(2026, 12, 25), "christmas", "Christmas"),
+])
+def test_seasonal_theme_on_signed_in_and_guest_pages(client, monkeypatch, holiday, name, label):
+    class FixedDate(date):
+        @classmethod
+        def today(cls):
+            return holiday
+
+    monkeypatch.setattr(app_module, "date", FixedDate)
+    guest = client.get("/login").get_data(as_text=True)
+    assert f'<body data-theme="{name}">' in guest
+    sign_in(client, "user")
+    signed_in = client.get("/assets").get_data(as_text=True)
+    assert f'<body data-theme="{name}">' in signed_in
+    assert f'<div class="season-label">{label}</div>' in signed_in
+
+
+def test_normal_theme_outside_holiday_window(client, monkeypatch):
+    class FixedDate(date):
+        @classmethod
+        def today(cls):
+            return date(2026, 6, 1)
+
+    monkeypatch.setattr(app_module, "date", FixedDate)
+    sign_in(client, "user")
+    html = client.get("/assets").get_data(as_text=True)
+    assert "<body>" in html
+    assert 'class="season-label"' not in html
+
+
 @pytest.mark.parametrize("role", ["user", "admin", "developer"])
 def test_dashboard_keeps_details_collapsed_and_available(client, role):
     sign_in(client, role)

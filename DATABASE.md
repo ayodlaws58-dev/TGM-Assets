@@ -80,3 +80,12 @@ example, hourly):
 The app also checks reminders while users visit pages. Scheduled execution ensures alerts
 are sent even when the app has no active visitors. Reminder keys prevent repeat email for
 the same due date.
+
+## Seasonal themes
+
+The site automatically displays a seasonal theme for the seven days before and the day
+of Easter Sunday, Nigerian Independence Day (October 1), Halloween (October 31),
+US Thanksgiving (the fourth Thursday in November), and Christmas (December 25).
+Easter is calculated using the Gregorian calendar. Dates use the application server's
+local date; outside these periods the standard theme is shown. Each theme also displays
+a seasonal decoration in the sidebar and page headers, or above the sign-in form.

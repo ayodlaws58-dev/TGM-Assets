@@ -18,7 +18,7 @@ from flask import (Flask, Response, abort, flash, g, redirect, render_template,
                    request, send_file, session, url_for)
 from werkzeug.utils import secure_filename
 
-from components import auth, mailer, notify, store
+from components import auth, mailer, notify, store, themes
 
 BASE = store.DATA.parent
 SECRET_FILE = store.DATA / ".secret_key"
@@ -49,7 +49,8 @@ def csrf_token():
 
 app.jinja_env.globals.update(csrf_token=csrf_token, ROLE_LABEL=auth.ROLE_LABEL,
                              has_role=lambda r: bool(g.get("user")) and auth.RANK[g.user["role"]] >= auth.RANK[r],
-                             KIND_LABEL=notify.KIND_LABEL, logo_url=lambda: url_for("logo"))
+                             KIND_LABEL=notify.KIND_LABEL, logo_url=lambda: url_for("logo"),
+                             seasonal_theme=lambda: themes.theme_for_date(date.today()))
 
 
 @app.before_request

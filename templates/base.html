@@ -1,14 +1,15 @@
-<!doctype html>
+{% set theme = seasonal_theme() %}<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{% block title %}TGM Assets{% endblock %}</title>
 <link rel="icon" href="{{ logo_url() }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <script src="{{ url_for('static', filename='app.js') }}" defer></script>
-</head><body>
+</head><body{% if theme %} data-theme="{{ theme.name }}"{% endif %}>
 {% if g.user %}
 <aside class="sidebar">
   <a class="brand" href="{{ url_for('dashboard') }}"><img src="{{ logo_url() }}" alt="TGM Assets logo"><span>TGM Assets</span></a>
+  {% if theme %}<div class="season-label">{{ theme.label }}</div>{% endif %}
   <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="primary-nav">Menu</button>
   <nav id="primary-nav" aria-label="Main navigation">
     {% set active_endpoint = {'asset_edit': 'assets_page', 'asset_detail': 'assets_page', 'asset_label': 'assets_page', 'asset_qr': 'assets_page', 'asset_attachment': 'assets_page', 'asset_attachment_upload': 'assets_page', 'asset_attachment_delete': 'assets_page', 'report_csv': 'reports'}.get(request.endpoint, request.endpoint) %}
