@@ -27,6 +27,6 @@ def theme_for_date(today):
         ("christmas", "Christmas", date(today.year, 12, 25)),
     )
     for name, label, holiday in holidays:
-        if holiday - timedelta(days=7) <= today <= holiday:
+        if holiday - timedelta(days=15) <= today <= holiday:
             return {"name": name, "label": label}
     return None
