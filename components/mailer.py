@@ -84,7 +84,7 @@ def save_config(host, port, user, password, sender):
 # Set the environment variable to a template ID or alias to point at a different template.
 TEMPLATES = {
     "procurement": ("RESEND_TEMPLATE_PROCUREMENT", "procurement"),
-    "work_order": ("RESEND_TEMPLATE_WORK_ORDER", "untitled-template-3"),
+    "work_order": ("RESEND_TEMPLATE_WORK_ORDER", "work-order-assigned"),
 }
 
 
