@@ -926,14 +926,30 @@ def procurement_new():
         aid = ""
     if wo and not (store.load_work_orders()["wo_id"] == wo).any():
         wo = ""
+    req_id = store.next_id(reqs, "req_id", "PR", 2001)
+    unit_cost = num(request.form.get("unit_cost"))
+    reason = request.form.get("reason", "").strip()
     reqs = store.add_row(
-        reqs, req_id=store.next_id(reqs, "req_id", "PR", 2001), item=item, quantity=qty,
-        unit_cost=num(request.form.get("unit_cost")), asset_id=aid, wo_id=wo,
-        reason=request.form.get("reason", "").strip(), requested_by=g.user["username"],
+        reqs, req_id=req_id, item=item, quantity=qty,
+        unit_cost=unit_cost, asset_id=aid, wo_id=wo,
+        reason=reason, requested_by=g.user["username"],
         created=today(), status="Pending")
     store.save_procurement(reqs)
+    # Procurement requests carry no department or priority of their own; use the linked work order's priority if any.
+    orders = store.load_work_orders()
+    linked = orders[orders["wo_id"] == wo] if wo else orders.iloc[0:0]
     notify.send(notify.recipients("admin", exclude=[g.user["username"]]), "request",
-                "Procurement request awaiting approval", f"{item} × {qty} requested by {g.user['username']}.")
+                "Procurement request awaiting approval", f"{item} × {qty} requested by {g.user['username']}.",
+                template="procurement",
+                variables={
+                    "id": req_id,
+                    "requester_name": g.user["full_name"] or g.user["username"],
+                    "department": "Not specified",
+                    "priority": linked.iloc[0]["priority"] if not linked.empty else "Not set",
+                    "description": f"{item} × {qty}" + (f" - {reason}" if reason else ""),
+                    "amount": f"{qty * unit_cost:,.2f} Naira" if unit_cost else "Not specified",
+                    "approval_url": url_for("approvals", _external=True),
+                })
     flash("Request submitted for approval.", "success")
     return redirect(url_for("procurement"))
 
@@ -1000,6 +1016,25 @@ def _decide(kind, item_id):
     notify.send([requester], "approval", f"{item_id} {decision.lower()}",
                 f"{df.loc[i, label].iloc[0]} was {decision.lower()} by {g.user['username']}."
                 + (f" Note: {note}" if note else ""))
+    if kind == "wo" and decision == "Approved":
+        order = df.loc[i].iloc[0]
+        technician = order["assigned_to"]
+        if technician:
+            assets = store.load_assets()
+            asset = assets[assets["asset_id"] == order["asset_id"]]
+            staff = auth.load_users().set_index("username")
+            notify.send([technician], "info", f"Work order {item_id} assigned to you", f"{order['title']}.",
+                        template="work_order",
+                        variables={
+                            "technician_name": staff["full_name"].get(technician, "") or technician,
+                            "work_order_number": item_id,
+                            "asset_name": asset.iloc[0]["name"] if not asset.empty else order["asset_id"],
+                            "location": (asset.iloc[0]["location"] if not asset.empty else "") or "Not specified",
+                            "priority": order["priority"],
+                            "due_date": order["due"] or "Not set",
+                            "work_description": order["description"] or order["title"],
+                            "work_order_url": url_for("workorders", _external=True),
+                        })
     flash(f"{item_id} {decision.lower()}.", "success")
     return redirect(url_for("approvals"))
 

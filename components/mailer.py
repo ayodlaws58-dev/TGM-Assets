@@ -80,6 +80,50 @@ def save_config(host, port, user, password, sender):
     return None
 
 
+# Published Resend templates the app uses. Each value is (environment variable, default alias).
+# Set the environment variable to a template ID or alias to point at a different template.
+TEMPLATES = {
+    "procurement": ("RESEND_TEMPLATE_PROCUREMENT", "procurement"),
+    "work_order": ("RESEND_TEMPLATE_WORK_ORDER", "untitled-template-3"),
+}
+
+
+def template_id(name):
+    """Resolve a TEMPLATES key to a Resend template ID or alias. Other values pass through unchanged."""
+    if name not in TEMPLATES:
+        return name
+    env_name, default = TEMPLATES[name]
+    return os.environ.get(env_name, "").strip() or default
+
+
+def send_template(to, template, variables, subject):
+    """Send a published Resend template. Returns None on success or an error message.
+
+    `template` is a TEMPLATES key or a Resend template ID/alias. `variables` fills the template's
+    {{{name}}} placeholders. A subject is required because the templates do not store one.
+    """
+    if not to:
+        return "No email address."
+    resend_config = resend_current()
+    if not resend_config["configured"]:
+        return "Resend templates need RESEND_API_KEY and RESEND_FROM_EMAIL."
+    resend.api_key = os.environ["RESEND_API_KEY"].strip()
+    params = {
+        "from": resend_config["sender"],
+        "to": [to],
+        "subject": subject,
+        "template": {
+            "id": template_id(template),
+            "variables": {k: str(v) for k, v in (variables or {}).items()},
+        },
+    }
+    try:
+        resend.Emails.send(params)
+    except ResendError as e:
+        return f"Could not send email: {e}"
+    return None
+
+
 def send_email(to, subject, html):
     """Send a plain-text email. Returns None on success or an error message."""
     if not to:

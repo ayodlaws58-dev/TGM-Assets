@@ -64,6 +64,30 @@ class ResendMailerTests(unittest.TestCase):
         smtp.assert_called_once_with("smtp.example.com", 587, timeout=15)
         smtp.return_value.send_message.assert_called_once()
 
+    def test_sends_resend_template_with_string_variables(self):
+        os.environ["RESEND_API_KEY"] = "re_test_key"
+        os.environ["RESEND_FROM_EMAIL"] = "TGM Assets <mail@example.com>"
+        with patch.object(mailer.resend.Emails, "send") as send:
+            self.assertIsNone(mailer.send_template(
+                "user@example.com", "procurement", {"id": "PR-2001", "amount": 1500.5}, "Subject"))
+        send.assert_called_once_with({
+            "from": "TGM Assets <mail@example.com>",
+            "to": ["user@example.com"],
+            "subject": "Subject",
+            "template": {"id": "procurement", "variables": {"id": "PR-2001", "amount": "1500.5"}},
+        })
+
+    def test_template_id_can_be_overridden_by_environment(self):
+        os.environ["RESEND_TEMPLATE_WORK_ORDER"] = "wo-template-id"
+        self.assertEqual(mailer.template_id("work_order"), "wo-template-id")
+        self.assertEqual(mailer.template_id("some-other-alias"), "some-other-alias")
+
+    def test_template_needs_resend_configuration(self):
+        self.assertEqual(
+            mailer.send_template("user@example.com", "procurement", {}, "Subject"),
+            "Resend templates need RESEND_API_KEY and RESEND_FROM_EMAIL.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
