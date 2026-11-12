@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Work Order Notification</title>
+</head>
+<body style="margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;background:#f4f6f9;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:20px;">
+<tr>
+<td align="center">
+
+<table width="650" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;">
+
+<!-- Header -->
+<tr>
+<td style="background:#ff6b00;color:#ffffff;padding:25px;text-align:center;">
+<h1 style="margin:0;">Work Order Assigned</h1>
+</td>
+</tr>
+
+<!-- Content -->
+<tr>
+<td style="padding:30px;">
+
+<p>Hello {{ technician_name }},</p>
+
+<p>A new work order has been assigned to you.</p>
+
+<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;">
+<tr>
+<td style="background:#f8f9fa;font-weight:bold;width:35%;">Work Order #</td>
+<td>{{ work_order_number }}</td>
+</tr>
+<tr>
+<td style="background:#f8f9fa;font-weight:bold;">Asset</td>
+<td>{{ asset_name }}</td>
+</tr>
+<tr>
+<td style="background:#f8f9fa;font-weight:bold;">Location</td>
+<td>{{ location }}</td>
+</tr>
+<tr>
+<td style="background:#f8f9fa;font-weight:bold;">Priority</td>
+<td>{{ priority }}</td>
+</tr>
+<tr>
+<td style="background:#f8f9fa;font-weight:bold;">Due Date</td>
+<td>{{ due_date }}</td>
+</tr>
+<tr>
+<td style="background:#f8f9fa;font-weight:bold;">Description</td>
+<td>{{ work_description }}</td>
+</tr>
+</table>
+
+<div style="text-align:center;margin-top:30px;">
+<a href="{{ work_order_url }}"
+   style="background:#ff6b00;color:#ffffff;text-decoration:none;padding:12px 25px;border-radius:5px;font-weight:bold;">
+   View Work Order
+</a>
+</div>
+
+</td>
+</tr>
+
+<tr>
+<td style="background:#f8f9fa;padding:15px;text-align:center;color:#666;">
+TGM Assets Work Order Management System
+</td>
+</tr>
+
+</table>
+
+</td>
+</tr>
+</table>
+
+</body>
+</html>

@@ -80,7 +80,7 @@ def save_config(host, port, user, password, sender):
     return None
 
 
-def send_email(to, subject, body):
+def send_email(to, subject, html):
     """Send a plain-text email. Returns None on success or an error message."""
     if not to:
         return "No email address."
@@ -93,7 +93,7 @@ def send_email(to, subject, body):
             "from": resend_config["sender"],
             "to": [to],
             "subject": subject,
-            "text": body,
+            "html": html,
         }
         try:
             resend.Emails.send(params)
@@ -108,7 +108,7 @@ def send_email(to, subject, body):
     msg["From"] = c["sender"] or c["user"]
     msg["To"] = to
     msg["Subject"] = subject
-    msg.set_content(body)
+    msg.add_alternative(html, subtype="html")
     port = int(c["port"] or 587)
     try:
         if port == 465:
