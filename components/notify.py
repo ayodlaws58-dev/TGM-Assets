@@ -38,8 +38,12 @@ def recipients(minimum, exclude=()):
     return [u for u in ok["username"] if u not in exclude]
 
 
-def send(usernames, kind, title, message, key=""):
-    """Create a notification per user. If `key` is given, each user gets it only once."""
+def send(usernames, kind, title, message, key="", template=None, variables=None):
+    """Create a notification per user. If `key` is given, each user gets it only once.
+
+    With `template` (a mailer.TEMPLATES key or a Resend template ID/alias), the email is sent from that
+    Resend template filled with `variables`; otherwise the message text is emailed as before.
+    """
     df = _load()
     ids = pd.to_numeric(df["notif_id"].str.extract(r"(\d+)$")[0], errors="coerce").dropna()
     n = int(ids.max()) if len(ids) else 0
@@ -67,7 +71,11 @@ def send(usernames, kind, title, message, key=""):
             to = users.get(r["username"], "")
             if not to:
                 continue
-            error = mailer.send_email(to, f"[TGM Assets] {r['title']}", r["message"])
+            subject = f"[TGM Assets] {r['title']}"
+            if template:
+                error = mailer.send_template(to, template, variables, subject)
+            else:
+                error = mailer.send_email(to, subject, r["message"])
             if error:
                 LOGGER.error("Could not email notification %s to %s: %s", r["notif_id"], r["username"], error)
             else:
