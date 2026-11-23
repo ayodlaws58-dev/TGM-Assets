@@ -324,7 +324,7 @@ def test_preventive_schedule_reminder_emails_are_deduplicated(client, monkeypatc
     store.save_schedules(schedules)
     sent = []
     monkeypatch.setattr(notify.mailer, "configured", lambda: True)
-    monkeypatch.setattr(notify.mailer, "send_email", lambda *args: sent.append(args))
+    monkeypatch.setattr(notify.mailer, "send_email", lambda *args, **kw: sent.append(args))
 
     notify.run_reminders()
     first_count = len(sent)
@@ -349,7 +349,7 @@ def test_resend_api_is_used_for_configured_reminders(monkeypatch):
             "from": "TGM Assets <assets@example.com>",
             "to": ["admin@example.com"],
             "subject": "Maintenance due",
-            "text": "Asset overdue.",
+            "html": "Asset overdue.",
         })
 
 
@@ -358,7 +358,7 @@ def test_failed_reminder_email_is_retried_without_duplicate_notification(client,
     attempts = []
     monkeypatch.setattr(notify.mailer, "configured", lambda: True)
     monkeypatch.setattr(notify.mailer, "send_email",
-                        lambda *args: (attempts.append(args), next(results))[1])
+                        lambda *args, **kw: (attempts.append(args), next(results))[1])
 
     notify.send(["admin"], "overdue", "Schedule overdue", "Asset due.",
                 key="schedule-overdue:SCH-1:2026-01-01")
@@ -384,3 +384,48 @@ def test_profile_email_and_password_forms_remain_functional(client):
                                               "password": "newpassword"}, follow_redirects=True)
     assert b"Password updated." in response.data
     assert auth.verify("user", "newpassword") is not None
+
+
+def test_emailed_link_returns_to_its_page_after_sign_in(client, monkeypatch):
+    monkeypatch.setattr(auth, "verify", lambda u, p: {"username": u})
+    response = client.get("/approvals")
+    assert response.status_code == 302 and response.headers["Location"].endswith("/login?next=/approvals")
+    page = client.get("/login?next=/approvals").get_data(as_text=True)
+    assert 'name="next" value="/approvals"' in page
+    token = re.search(r'name="csrf_token" value="([^"]+)"', page).group(1)
+    response = client.post("/login", data={"csrf_token": token, "username": "admin", "password": "x",
+                                           "next": "/approvals"})
+    assert response.status_code == 302 and response.headers["Location"].endswith("/approvals")
+
+
+def test_sign_in_ignores_off_site_destinations(client, monkeypatch):
+    monkeypatch.setattr(auth, "verify", lambda u, p: {"username": u})
+    page = client.get("/login").get_data(as_text=True)
+    token = re.search(r'name="csrf_token" value="([^"]+)"', page).group(1)
+    response = client.post("/login", data={"csrf_token": token, "username": "admin", "password": "x",
+                                           "next": "https://evil.example/steal"})
+    assert response.status_code == 302 and "evil.example" not in response.headers["Location"]
+
+
+def test_notification_email_has_a_button_to_the_right_page(client, monkeypatch):
+    sent = []
+    monkeypatch.setenv("APP_BASE_URL", "https://assets.example.com")
+    monkeypatch.setattr(notify.mailer, "configured", lambda: True)
+    monkeypatch.setattr(notify.mailer, "send_email", lambda to, subject, html, text=None: sent.append((html, text)))
+    notify.send(["admin"], "request", "Procurement request awaiting approval", "Oil filter × 2 requested.",
+                link=("Review request", "/approvals"), facts=[("Request", "PR-1"), ("Priority", "High")])
+    notify.send(["admin"], "info", "Plain update", "Nothing special.")
+    assert 'href="https://assets.example.com/approvals"' in sent[0][0] and "Review request" in sent[0][0]
+    assert "Request: PR-1" in sent[0][1]
+    assert 'href="https://assets.example.com/notifications"' in sent[1][0]  # default page
+
+
+def test_reset_email_shows_the_code_and_links_to_the_reset_page(client, monkeypatch):
+    sent = []
+    monkeypatch.setenv("APP_BASE_URL", "https://assets.example.com")
+    monkeypatch.setattr(auth.mailer if hasattr(auth, "mailer") else notify.mailer, "configured", lambda: True)
+    monkeypatch.setattr(notify.mailer, "send_email", lambda to, subject, html, text=None: sent.append((html, text)))
+    assert auth.request_reset("admin") is None
+    html, text = sent[0]
+    assert re.search(r"code: \d{6}", text) and 'id="reset-code"' in html
+    assert 'href="https://assets.example.com/reset"' in html

@@ -3,13 +3,15 @@ from datetime import date
 
 import pandas as pd
 
-from components import auth, database, mailer, store
+from components import auth, database, emailkit, mailer, store
 
 FILE = store.DATA / "notifications.csv"
 COLS = ["notif_id", "username", "kind", "title", "message", "created", "read", "key", "email_sent"]
 KIND_LABEL = {"reminder": "Reminder", "overdue": "Overdue", "approval": "Decision", "request": "Request",
               "payment": "Payment", "info": "Update"}
 LOGGER = logging.getLogger(__name__)
+# Where the email button goes when the caller doesn't pick a page.
+DEFAULT_LINK = ("Open notifications", "/notifications")
 
 
 def _load():
@@ -38,11 +40,16 @@ def recipients(minimum, exclude=()):
     return [u for u in ok["username"] if u not in exclude]
 
 
-def send(usernames, kind, title, message, key="", template=None, variables=None):
+def send(usernames, kind, title, message, key="", template=None, variables=None,
+         link=None, facts=(), tone=None):
     """Create a notification per user. If `key` is given, each user gets it only once.
 
+    The email uses the shared branded layout (components/emailkit.py). `link` is (button label, site path)
+    for the button, `facts` is a list of (label, value) rows shown in the email, and `tone` overrides the
+    colour scheme (defaults to `kind`, e.g. "rejected" for a red decision).
+
     With `template` (a mailer.TEMPLATES key or a Resend template ID/alias), the email is sent from that
-    Resend template filled with `variables`; otherwise the message text is emailed as before.
+    hosted Resend template filled with `variables` instead.
     """
     df = _load()
     ids = pd.to_numeric(df["notif_id"].str.extract(r"(\d+)$")[0], errors="coerce").dropna()
@@ -75,7 +82,9 @@ def send(usernames, kind, title, message, key="", template=None, variables=None)
             if template:
                 error = mailer.send_template(to, template, variables, subject)
             else:
-                error = mailer.send_email(to, subject, r["message"])
+                html, text = emailkit.render(tone or r["kind"], r["title"], r["message"], facts=facts,
+                                             button=link or DEFAULT_LINK)
+                error = mailer.send_email(to, subject, html, text=text)
             if error:
                 LOGGER.error("Could not email notification %s to %s: %s", r["notif_id"], r["username"], error)
             else:
@@ -119,10 +128,14 @@ def run_reminders():
         if r["status"] == "Overdue":
             send(admins, "overdue", f"{r['kind']} overdue: {r['name']}",
                  f"{r['name']} ({r['location']}) was due {when}.",
-                 key=f"asset-over:{r['asset_id']}:{when}:{today_text}")
+                 key=f"asset-over:{r['asset_id']}:{when}:{today_text}",
+                 link=("View asset", f"/assets/{r['asset_id']}"),
+                 facts=[("Asset", r["name"]), ("Location", r["location"]), ("Was due", when)])
         else:
             send(admins, "reminder", f"{r['kind']} due soon: {r['name']}",
-                 f"{r['name']} ({r['location']}) is due {when}.", key=f"asset-soon:{r['asset_id']}:{when}")
+                 f"{r['name']} ({r['location']}) is due {when}.", key=f"asset-soon:{r['asset_id']}:{when}",
+                 link=("View asset", f"/assets/{r['asset_id']}"),
+                 facts=[("Asset", r["name"]), ("Location", r["location"]), ("Due", when)])
     assets = store.load_assets()
     schedules = store.schedule_rows(store.load_schedules(), assets)
     users = set(auth.load_users()["username"])
@@ -135,7 +148,10 @@ def run_reminders():
         send(who, kind, f"Preventive maintenance {row['status'].lower()}: {row['schedule_title']}",
              f"{row['asset_id']} {row['name']} ({row['location']}) is due {when}.",
              key=f"schedule-{row['status'].lower()}:{row['schedule_id']}:{when}"
-             + (f":{today_text}" if row["status"] == "Overdue" else ""))
+             + (f":{today_text}" if row["status"] == "Overdue" else ""),
+             link=("View asset", f"/assets/{row['asset_id']}"),
+             facts=[("Task", row["schedule_title"]), ("Asset", f"{row['asset_id']} {row['name']}"),
+                    ("Location", row["location"]), ("Due", when)])
     orders = store.load_work_orders()
     late = orders[(orders["approval_status"] == "Approved") & (orders["status"] != "Completed")
                   & (orders["due"] != "") & (orders["due"] < today_text)]
@@ -143,4 +159,7 @@ def run_reminders():
         who = admins + ([o["assigned_to"]] if o["assigned_to"] in users else [])
         send(who, "overdue", f"Work order overdue: {o['wo_id']}",
              f"{o['title']} was due {o['due']}.",
-             key=f"wo-over:{o['wo_id']}:{o['due']}:{today_text}")
+             key=f"wo-over:{o['wo_id']}:{o['due']}:{today_text}",
+             link=("View work order", "/workorders"),
+             facts=[("Work order", o["wo_id"]), ("Priority", o["priority"]), ("Was due", o["due"]),
+                    ("Assigned to", o["assigned_to"])])
