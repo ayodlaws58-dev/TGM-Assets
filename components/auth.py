@@ -131,11 +131,13 @@ def request_reset(identifier):
     users.at[idx, "reset_expires"] = str(time.time() + RESET_TTL)
     users.at[idx, "reset_attempts"] = "0"
     save_users(users)
-    mailer.send_email(
-        users.at[idx, "email"], "Your TGM Assets password reset code",
-        f"Hello {users.at[idx, 'full_name'] or users.at[idx, 'username']},\n\n"
-        f"Your password reset code is: {code}\n\nIt expires in 15 minutes. "
-        "If you did not request this, you can ignore this email.")
+    from components import emailkit
+    html, text = emailkit.render(
+        "account", "Reset your password",
+        f"Hello {users.at[idx, 'full_name'] or users.at[idx, 'username']}, use this code to choose a new password.",
+        code=("Your password reset code", code), button=("Enter your code", "/reset"),
+        note="It expires in 15 minutes. If you did not request this, you can ignore this email.")
+    mailer.send_email(users.at[idx, "email"], "Your TGM Assets password reset code", html, text=text)
     return None
 
 

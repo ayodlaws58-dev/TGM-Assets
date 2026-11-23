@@ -18,7 +18,7 @@ from flask import (Flask, Response, abort, flash, g, redirect, render_template,
                    request, send_file, session, url_for)
 from werkzeug.utils import secure_filename
 
-from components import auth, mailer, notify, store, themes
+from components import auth, emailkit, mailer, notify, store, themes
 
 BASE = store.DATA.parent
 SECRET_FILE = store.DATA / ".secret_key"
@@ -99,12 +99,23 @@ def login_required(minimum="user"):
             if not auth.load_users().shape[0]:
                 return redirect(url_for("setup"))
             if not g.user:
+                target = request.full_path.rstrip("?")
+                if request.method == "GET" and target != "/":  # emailed links land on their page after sign-in
+                    return redirect(url_for("login", next=target))
                 return redirect(url_for("login"))
             if auth.RANK[g.user["role"]] < auth.RANK[minimum]:
                 abort(403)
             return fn(*a, **kw)
         return wrapper
     return deco
+
+
+def _safe_next(value):
+    """Only same-site paths are allowed as a post-login destination (blocks open redirects)."""
+    value = (value or "").strip()
+    if value.startswith("/") and not value.startswith(("//", "/\\")) and "\n" not in value and "\r" not in value:
+        return value
+    return ""
 
 
 @app.errorhandler(403)
@@ -208,8 +219,9 @@ def setup():
 def login():
     if not auth.load_users().shape[0]:
         return redirect(url_for("setup"))
+    nxt = _safe_next(request.values.get("next"))
     if g.user:
-        return redirect(url_for("dashboard"))
+        return redirect(nxt or url_for("dashboard"))
     if request.method == "POST":
         uname = request.form["username"].strip().lower()
         key = (request.remote_addr, uname)
@@ -225,8 +237,8 @@ def login():
                 FAILS.pop(key, None)
                 session.clear()
                 session["username"] = r["username"]
-                return redirect(url_for("dashboard"))
-    return render_template("login.html")
+                return redirect(nxt or url_for("dashboard"))
+    return render_template("login.html", next=nxt)
 
 
 @app.route("/signup", methods=["GET", "POST"])
@@ -813,8 +825,9 @@ def workorder_new():
             flash("Choose a preventive schedule for the selected asset.", "error")
             return redirect(url_for("workorders"))
     prio = request.form.get("priority", "Medium")
+    wo_id = store.next_id(orders, "wo_id", "WO", 1001)
     orders = store.add_row(
-        orders, wo_id=store.next_id(orders, "wo_id", "WO", 1001), asset_id=aid, title=title,
+        orders, wo_id=wo_id, asset_id=aid, title=title,
         description=request.form.get("description", "").strip(),
         priority=prio if prio in store.PRIORITIES else "Medium", status="New",
         assigned_to=assigned_to, schedule_id=schedule_id, created=today(),
@@ -822,7 +835,12 @@ def workorder_new():
         cost=num(request.form.get("cost")), payment_status="Unpaid", approval_status="Pending")
     store.save_work_orders(orders)
     notify.send(notify.recipients("admin", exclude=[g.user["username"]]), "request",
-                "Work order awaiting approval", f"{title} requested by {g.user['username']}.")
+                "Work order awaiting approval", f"{title} requested by {g.user['username']}.",
+                link=("Review work order", "/approvals"),
+                facts=[("Work order", wo_id), ("Asset", f"{aid} {selected.iloc[0]['name']}"),
+                       ("Priority", prio if prio in store.PRIORITIES else "Medium"),
+                       ("Due", valid_date(request.form.get("due", ""))),
+                       ("Requested by", g.user["full_name"] or g.user["username"])])
     flash("Work order submitted for approval.", "success")
     return redirect(url_for("workorders"))
 
@@ -889,7 +907,9 @@ def payment_save(wo_id):
     store.save_work_orders(orders)
     requester = orders.loc[i, "requested_by"].iloc[0]
     if pstatus == "Paid" and not was_paid and requester and requester != g.user["username"]:
-        notify.send([requester], "payment", f"Payment recorded: {wo_id}", f"{amount:,.2f} Naira marked as paid.")
+        notify.send([requester], "payment", f"Payment recorded: {wo_id}", f"{amount:,.2f} Naira marked as paid.",
+                    link=("View work order", "/workorders"),
+                    facts=[("Work order", wo_id), ("Amount", f"{amount:,.2f} Naira"), ("Paid on", today())])
     flash("Payment saved.", "success")
     return redirect(url_for("payments"))
 
@@ -940,16 +960,11 @@ def procurement_new():
     linked = orders[orders["wo_id"] == wo] if wo else orders.iloc[0:0]
     notify.send(notify.recipients("admin", exclude=[g.user["username"]]), "request",
                 "Procurement request awaiting approval", f"{item} × {qty} requested by {g.user['username']}.",
-                template="procurement",
-                variables={
-                    "id": req_id,
-                    "requester_name": g.user["full_name"] or g.user["username"],
-                    "department": "Not specified",
-                    "priority": linked.iloc[0]["priority"] if not linked.empty else "Not set",
-                    "description": f"{item} × {qty}" + (f" - {reason}" if reason else ""),
-                    "amount": f"{qty * unit_cost:,.2f} Naira" if unit_cost else "Not specified",
-                    "approval_url": url_for("approvals", _external=True),
-                })
+                link=("Review request", "/approvals"),
+                facts=[("Request", req_id), ("Requested by", g.user["full_name"] or g.user["username"]),
+                       ("Item", f"{item} × {qty}"), ("Reason", reason),
+                       ("Priority", linked.iloc[0]["priority"] if not linked.empty else ""),
+                       ("Total cost", f"{qty * unit_cost:,.2f} Naira" if unit_cost else "")])
     flash("Request submitted for approval.", "success")
     return redirect(url_for("procurement"))
 
@@ -966,7 +981,9 @@ def procurement_advance(req_id):
     reqs.loc[i, "status"] = new
     store.save_procurement(reqs)
     notify.send([reqs.loc[i, "requested_by"].iloc[0]], "info", f"{req_id} is now {new}",
-                f"Your request for {reqs.loc[i, 'item'].iloc[0]} was updated.")
+                f"Your request for {reqs.loc[i, 'item'].iloc[0]} was updated.",
+                link=("View request", "/procurement"),
+                facts=[("Request", req_id), ("Item", reqs.loc[i, "item"].iloc[0]), ("New status", new)])
     return redirect(url_for("procurement"))
 
 
@@ -1015,7 +1032,11 @@ def _decide(kind, item_id):
     save(df)
     notify.send([requester], "approval", f"{item_id} {decision.lower()}",
                 f"{df.loc[i, label].iloc[0]} was {decision.lower()} by {g.user['username']}."
-                + (f" Note: {note}" if note else ""))
+                + (f" Note: {note}" if note else ""),
+                tone="rejected" if decision == "Rejected" else "approval",
+                link=("View work order", "/workorders") if kind == "wo" else ("View request", "/procurement"),
+                facts=[("Reference", item_id), ("Decision", decision),
+                       ("Decided by", g.user["full_name"] or g.user["username"]), ("Note", note)])
     if kind == "wo" and decision == "Approved":
         order = df.loc[i].iloc[0]
         technician = order["assigned_to"]
@@ -1023,18 +1044,15 @@ def _decide(kind, item_id):
             assets = store.load_assets()
             asset = assets[assets["asset_id"] == order["asset_id"]]
             staff = auth.load_users().set_index("username")
-            notify.send([technician], "info", f"Work order {item_id} assigned to you", f"{order['title']}.",
-                        template="work_order",
-                        variables={
-                            "technician_name": staff["full_name"].get(technician, "") or technician,
-                            "work_order_number": item_id,
-                            "asset_name": asset.iloc[0]["name"] if not asset.empty else order["asset_id"],
-                            "location": (asset.iloc[0]["location"] if not asset.empty else "") or "Not specified",
-                            "priority": order["priority"],
-                            "due_date": order["due"] or "Not set",
-                            "work_description": order["description"] or order["title"],
-                            "work_order_url": url_for("workorders", _external=True),
-                        })
+            who = staff["full_name"].get(technician, "") or technician
+            notify.send([technician], "info", f"Work order {item_id} assigned to you",
+                        f"Hello {who}, a new work order has been assigned to you: {order['title']}.",
+                        link=("View work order", "/workorders"),
+                        facts=[("Work order", item_id),
+                               ("Asset", asset.iloc[0]["name"] if not asset.empty else order["asset_id"]),
+                               ("Location", asset.iloc[0]["location"] if not asset.empty else ""),
+                               ("Priority", order["priority"]), ("Due", order["due"]),
+                               ("Details", order["description"])])
     flash(f"{item_id} {decision.lower()}.", "success")
     return redirect(url_for("approvals"))
 
@@ -1114,12 +1132,13 @@ def user_new():
     if err:
         flash(err, "error")
     elif request.form.get("send_email") and email:
-        mail_err = mailer.send_email(
-            email, "Your TGM Assets account",
-            f"Hello {name or username},\n\nAn account was created for you.\n\n"
-            f"Username: {username.strip().lower()}\nTemporary password: {pw}\n"
-            f"Role: {auth.ROLE_LABEL[role]}\n\nPlease sign in and change your password "
-            "(or use 'Forgot password?' on the sign-in page).")
+        html, text = emailkit.render(
+            "account", "Welcome to TGM Assets", f"Hello {name or username}, an account was created for you.",
+            facts=[("Username", username.strip().lower()), ("Temporary password", pw),
+                   ("Role", auth.ROLE_LABEL[role])],
+            button=("Sign in", "/login"),
+            note="Please sign in and change your password (or use 'Forgot password?' on the sign-in page).")
+        mail_err = mailer.send_email(email, "Your TGM Assets account", html, text=text)
         flash(mail_err or "User created and email sent.", "error" if mail_err else "success")
     else:
         flash("User created.", "success")
@@ -1176,9 +1195,11 @@ def user_compose():
     if not (targets and subject and body):
         flash("Choose recipients and enter a subject and message.", "error")
         return redirect(url_for("users_page"))
-    sig = f"\n\n- {g.user['full_name'] or g.user['username']}"
+    sender = g.user["full_name"] or g.user["username"]
+    html, text = emailkit.render("account", subject, body, note=f"Sent by {sender}",
+                                 button=("Open TGM Assets", "/"))
     errs = [f"{u}: {e}" for u in targets
-            if (e := mailer.send_email(users.at[u, "email"], subject, body + sig))]
+            if (e := mailer.send_email(users.at[u, "email"], subject, html, text=text))]
     flash("; ".join(errs) if errs else f"Sent to {len(targets)} user(s).", "error" if errs else "success")
     return redirect(url_for("users_page"))
 
@@ -1246,8 +1267,10 @@ def settings_smtp_test():
     if not auth.EMAIL_RE.match(to):
         flash("Add your email on My Profile, or enter an address to send the test to.", "error")
     else:
-        err = mailer.send_email(to, "TGM Assets test email",
-                                "This is a test email from TGM Assets. Your SMTP settings work.")
+        html, text = emailkit.render("info", "Your email settings work",
+                                     "This is a test email from TGM Assets.",
+                                     button=("Open settings", "/settings"))
+        err = mailer.send_email(to, "TGM Assets test email", html, text=text)
         flash(err or f"Test email sent to {to}.", "error" if err else "success")
     return redirect(url_for("settings"))
 

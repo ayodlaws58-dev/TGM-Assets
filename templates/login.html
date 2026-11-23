@@ -2,6 +2,7 @@
 {% block content %}<div class="auth">
 <h1><img class="logo-lg" src="{{ logo_url() }}" alt="TGM Assets logo"><br>TGM Assets</h1><div class="sub">Maintenance &amp; asset tracking</div>
 <form method="post" class="card"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
   <label>Username</label><input name="username" autocomplete="username" required autofocus>
   <label>Password</label><input name="password" type="password" autocomplete="current-password" required>
   <button>Sign in</button>

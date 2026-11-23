@@ -30,7 +30,7 @@ class ResendMailerTests(unittest.TestCase):
             "from": "TGM Assets <mail@example.com>",
             "to": ["user@example.com"],
             "subject": "Subject",
-            "text": "Body",
+            "html": "Body",
         })
         self.assertTrue(mailer.configured())
 

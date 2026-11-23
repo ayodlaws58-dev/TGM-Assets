@@ -125,9 +125,9 @@ def test_all():
     import components.mailer as mailer
     sent = {}
     mailer.configured = lambda: True
-    mailer.send_email = lambda to, s, b: sent.update(to=to, body=b)
+    mailer.send_email = lambda to, s, b, text=None: sent.update(to=to, body=b, text=text)
     post(anon, "/forgot", dict(identifier="ad@x.com"), "/forgot")
-    code = re.search(r"code is: (\d{6})", sent["body"]).group(1)
+    code = re.search(r"code: (\d{6})", sent["text"]).group(1)
     assert b"Invalid or expired" in post(anon, "/reset", dict(identifier="ad", code="000000",
                                                               password="brandnew123"), "/reset").data
     assert b"Password updated" in post(anon, "/reset", dict(identifier="ad", code=code,

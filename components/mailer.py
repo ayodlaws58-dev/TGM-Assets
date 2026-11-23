@@ -124,8 +124,9 @@ def send_template(to, template, variables, subject):
     return None
 
 
-def send_email(to, subject, html):
-    """Send a plain-text email. Returns None on success or an error message."""
+def send_email(to, subject, html, text=None):
+    """Send an HTML email, with an optional plain-text copy for clients that don't show HTML.
+    Returns None on success or an error message."""
     if not to:
         return "No email address."
     resend_config = resend_current()
@@ -139,6 +140,8 @@ def send_email(to, subject, html):
             "subject": subject,
             "html": html,
         }
+        if text:
+            params["text"] = text
         try:
             resend.Emails.send(params)
         except ResendError as e:
@@ -152,6 +155,7 @@ def send_email(to, subject, html):
     msg["From"] = c["sender"] or c["user"]
     msg["To"] = to
     msg["Subject"] = subject
+    msg.set_content(text or "This message is best viewed in an email client that supports HTML.")
     msg.add_alternative(html, subtype="html")
     port = int(c["port"] or 587)
     try:
