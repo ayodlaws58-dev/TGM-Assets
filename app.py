@@ -39,6 +39,15 @@ app = Flask(__name__)
 app.config.update(SECRET_KEY=_secret_key(), SESSION_COOKIE_HTTPONLY=True,
                   SESSION_COOKIE_SAMESITE="Lax", MAX_CONTENT_LENGTH=10 * 1024 * 1024)
 
+# Behind Cloudflare Tunnel every request arrives from cloudflared on localhost. Trust its
+# forwarded headers so sign-in lockouts see the visitor's address and links use https.
+# Enable only when the app listens on 127.0.0.1 and nothing else can reach it.
+if os.environ.get("TRUST_PROXY", "").strip().lower() in ("1", "true", "yes"):
+    from werkzeug.middleware.proxy_fix import ProxyFix
+
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+    app.config.update(SESSION_COOKIE_SECURE=True, PREFERRED_URL_SCHEME="https")
+
 
 # ---------- request plumbing ----------
 def csrf_token():

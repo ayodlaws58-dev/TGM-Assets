@@ -1,0 +1,8 @@
+[Unit]
+Description=Back up the TGM Assets database and uploads
+After=mysql.service
+Requires=mysql.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/tgm-assets-backup
