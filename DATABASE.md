@@ -61,6 +61,48 @@ Asset depreciation uses the straight-line method: purchase cost less salvage val
 spread across the recorded useful life. Book value is capped at salvage value and
 depreciation stops at the recorded retirement or disposal date.
 
+## Hosting with Cloudflare Tunnel
+
+The app, MySQL and the uploads run on one Ubuntu 22.04/24.04 server. Cloudflare Tunnel
+publishes the site at `https://assets.tgmeducation.com`. The server opens no inbound ports:
+`cloudflared` connects out to Cloudflare, Gunicorn listens on `127.0.0.1:8000`, and MySQL
+listens on `127.0.0.1` only.
+
+1. Copy the repository to `/opt/tgm-assets` on the server, then run:
+
+   ```bash
+   cd /opt/tgm-assets && sudo bash deploy/setup_server.sh
+   ```
+
+   This installs MySQL 8 and the app's Python dependencies. It also creates the `tgm_assets`
+   database and its user, and writes `/opt/tgm-assets/.env` with generated passwords,
+   `SECRET_KEY` and `TRUST_PROXY=1`. Finally it installs the `tgm-assets` service, the hourly
+   reminder timer and the nightly backup timer, and installs `cloudflared`. Running it again
+   keeps an existing `.env` and database.
+2. Add `RESEND_API_KEY` to `.env`, then run `sudo systemctl restart tgm-assets`.
+3. Import the CSV data once with the commands the script prints.
+4. In the Cloudflare dashboard, add `tgmeducation.com` to Cloudflare if it isn't there yet.
+   Go to **Zero Trust → Networks → Tunnels**, create a tunnel, and run the
+   `sudo cloudflared service install <TOKEN>` command it shows on the server. Add a public
+   hostname `assets` on `tgmeducation.com` with service `http://127.0.0.1:8000`.
+
+`TRUST_PROXY=1` makes the app read the visitor's address and `https` from the headers that
+`cloudflared` adds, which sign-in lockouts and QR code links depend on. It also marks session
+cookies secure. Set it only while Gunicorn listens on `127.0.0.1`.
+
+Useful commands:
+
+```bash
+sudo systemctl status tgm-assets cloudflared   # is it running?
+sudo journalctl -u tgm-assets -f               # app log
+sudo systemctl start tgm-backup                # back up now
+cd /opt/tgm-assets && sudo -u tgm git pull && sudo systemctl restart tgm-assets   # update
+```
+
+Backups go to `/var/backups/tgm-assets` every night at 02:30 and are kept for 14 days. Each
+backup has a MySQL dump plus the uploads, logo and `.env`. Copy them off the server
+regularly. To restore: `gunzip -c db_<date>.sql.gz | mysql tgm_assets`.
+
 ## Maintenance schedules and email reminders
 
 Preventive schedules recur by calendar days, weeks, months or years. Usage-meter intervals

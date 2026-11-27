@@ -1,0 +1,11 @@
+[Unit]
+Description=TGM Assets maintenance reminder emails
+After=mysql.service
+Requires=mysql.service
+
+[Service]
+Type=oneshot
+User=tgm
+Group=tgm
+WorkingDirectory=/opt/tgm-assets
+ExecStart=/opt/tgm-assets/.venv/bin/python scripts/run_reminders.py
